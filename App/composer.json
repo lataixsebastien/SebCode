@@ -82,5 +82,13 @@
             "allow-contrib": false,
             "require": "8.1.*"
         }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5.55",
+        "symfony/phpunit-bridge": "^8.1"
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test:unit": "vendor/bin/phpunit --testsuite Unit"
     }
 }

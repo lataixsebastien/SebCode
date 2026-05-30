@@ -1,6 +1,6 @@
 # STEP-01 — Bootstrap : branche, CLAUDE.md, workflow docs
 
-**Statut :** en cours
+**Statut :** ✅ terminé (commit `728402b`)
 **Branche :** `feat/sebcode-foundation` (depuis `main`)
 
 ## But

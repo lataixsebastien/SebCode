@@ -12,3 +12,8 @@
 # Tooling caches
 /.php-cs-fixer.cache
 /.phpunit.result.cache
+
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###
