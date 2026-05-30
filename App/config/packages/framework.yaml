@@ -2,6 +2,12 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # Long timeout for the default HTTP client — LLM calls via Ollama can
+    # take a while (model load + slow tokens on small machines).
+    http_client:
+        default_options:
+            timeout: '%env(float:OLLAMA_HTTP_TIMEOUT)%'
+
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 

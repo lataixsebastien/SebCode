@@ -9,7 +9,7 @@
 | Domain | ✅ STEP-02 |
 | Application | ✅ STEP-03 |
 | Infrastructure persistence | ✅ STEP-04 |
-| Infrastructure LLM (Ollama) | ⏳ STEP-05 |
+| Infrastructure LLM (Ollama) | ✅ STEP-05 |
 | UI (CLI + TUI) | ⏳ STEP-06 |
 
 ---
@@ -250,7 +250,55 @@ docker compose exec php bin/console doctrine:migrations:migrate -n
 
 ### 3.6 `Llm/SymfonyAiOllamaAdapter`
 
-*À venir — STEP-05.* Implémentera `LlmPort` via `symfony/ai-platform` + `symfony/ai-ollama-platform`.
+Implémente `LlmPort` au-dessus de `symfony/ai-platform` + `symfony/ai-ollama-platform` (bundle).
+
+**Pipeline `complete(ModelName, list<Message>)` :**
+
+1. Traduit la conversation Domain → `Symfony\AI\Platform\Message\MessageBag` :
+   - `MessageRole::System` → `SystemMessage($text)`
+   - `MessageRole::User` → `UserMessage(new Text($text))`
+   - `MessageRole::Assistant` → `AssistantMessage(new Text($text))`
+   - `MessageRole::Tool` → **non supporté pour l'instant** → lève `LlmUnavailable` (sera levé quand on aura le contexte `Tool`).
+2. Appelle `$platform->invoke($model->value, $bag)` → `DeferredResult`.
+3. `$deferred->getResult()` → attend `TextResult`. Tout autre type → `LlmUnavailable`.
+4. Lit le metadata `'token_usage'` (rempli par l'adapter Ollama via `OllamaResultConverter::getTokenUsageExtractor()`) → extrait `promptTokens`/`completionTokens`.
+5. Toute exception remontée par la Platform → enveloppée dans `LlmUnavailable::fromUpstream($message, $previous)`.
+
+**Wiring :**
+
+```yaml
+# config/services.yaml
+App\Assistant\Domain\Port\LlmPort:
+    alias: App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter
+
+App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter:
+    arguments:
+        $platform: '@ai.platform.ollama'
+```
+
+```yaml
+# config/packages/ai_ollama_platform.yaml
+ai:
+    platform:
+        ollama:
+            endpoint: '%env(OLLAMA_ENDPOINT)%'
+```
+
+**Variables d'env (`.env`) :**
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `OLLAMA_ENDPOINT` | `http://host.docker.internal:11434` | Endpoint HTTP de l'instance Ollama (Linux : ajuster vers le bridge Docker). |
+| `OLLAMA_HTTP_TIMEOUT` | `600` | Timeout HTTP client par défaut (long parce que les LLM peuvent être lents au cold start). |
+| `LLM_MODEL` | `qwen2.5:3b` | Modèle Ollama utilisé par défaut. Doit être préalablement pull dans Ollama (`ollama pull qwen2.5:3b`). |
+
+**Tests :** 4 tests unitaires sur `SymfonyAiOllamaAdapter` (`tests/Unit/Assistant/Infrastructure/Llm/`) :
+- Translation role-par-role + ordre préservé.
+- Extraction des tokens via metadata `'token_usage'`.
+- Enveloppe les exceptions de la Platform dans `LlmUnavailable`.
+- Refuse `MessageRole::Tool` proprement.
+
+Pas de test d'intégration avec Ollama réel dans cette step — la validation end-to-end viendra avec `assistant:ask` en STEP-06.
 
 ---
 

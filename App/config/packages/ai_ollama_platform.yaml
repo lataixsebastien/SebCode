@@ -1,3 +1,4 @@
 ai:
     platform:
-        ollama: null
+        ollama:
+            endpoint: '%env(OLLAMA_ENDPOINT)%'

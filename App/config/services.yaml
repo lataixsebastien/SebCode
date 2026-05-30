@@ -32,3 +32,11 @@ services:
 
     App\Assistant\Domain\Port\MessageRepository:
         alias: App\Assistant\Infrastructure\Persistence\Doctrine\Repository\DoctrineMessageRepository
+
+    App\Assistant\Domain\Port\LlmPort:
+        alias: App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter
+
+    # The Ollama-backed adapter takes the AI bundle Platform service for ollama.
+    App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter:
+        arguments:
+            $platform: '@ai.platform.ollama'
