@@ -9,7 +9,7 @@
 | Domain | ✅ STEP-02 |
 | Application | ✅ STEP-03 |
 | Infrastructure persistence | ✅ STEP-04 |
-| Infrastructure LLM (Ollama) | ✅ STEP-05 |
+| Infrastructure LLM (Ollama) | ✅ STEP-05 + tool calling support STEP-11 |
 | UI CLI | ✅ STEP-06 |
 | UI TUI | ✅ STEP-07 (validation interactive à faire en TTY réel) |
 

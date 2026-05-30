@@ -28,6 +28,8 @@ final class RecordingPlatform implements PlatformInterface
 {
     public ?string $lastModel = null;
     public mixed $lastInput = null;
+    /** @var array<string, mixed> */
+    public array $lastOptions = [];
 
     public function __construct(
         private readonly ResultInterface $stubResult,
@@ -39,6 +41,7 @@ final class RecordingPlatform implements PlatformInterface
     {
         $this->lastModel = $model;
         $this->lastInput = $input;
+        $this->lastOptions = $options;
 
         return new DeferredResult($this->buildConverter(), new InMemoryRawResult());
     }
