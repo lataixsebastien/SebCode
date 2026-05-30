@@ -8,8 +8,9 @@
 |---|---|
 | Domain | ✅ STEP-02 |
 | Application | ✅ STEP-03 |
-| Infrastructure | ⏳ STEP-04 |
-| UI (CLI + TUI) | ⏳ STEP-05 |
+| Infrastructure persistence | ✅ STEP-04 |
+| Infrastructure LLM (Ollama) | ⏳ STEP-05 |
+| UI (CLI + TUI) | ⏳ STEP-06 |
 
 ---
 
@@ -171,14 +172,85 @@ Sous `App/tests/Support/Assistant/Doubles/`, réutilisables :
 
 ## 3. Infrastructure (`App/src/Assistant/Infrastructure/`)
 
-*À venir — STEP-04.*
+### 3.1 `Clock/SystemClock`
 
-Adapters prévus :
+Implémente `Clock` via `new \DateTimeImmutable('now')`. Aucune dépendance.
 
-- `SystemClock` (implémente `Clock`).
-- `SymfonyUidGenerator` (implémente `IdGenerator`, basé sur `Symfony\Component\Uid\Uuid::v7()`).
-- `DoctrineSessionRepository` + `DoctrineMessageRepository` (Postgres).
-- `SymfonyAiOllamaAdapter` (implémente `LlmPort`, basé sur `symfony/ai-platform` + `symfony/ai-ollama-platform`).
+### 3.2 `Id/SymfonyUidGenerator`
+
+Implémente `IdGenerator` via `Symfony\Component\Uid\Uuid::v7()->toBase58()`. Préfixe `ses_` / `msg_` ajouté. **UUIDv7 est time-ordered** : les ids triés alphabétiquement sont chronologiques — utile pour les listings sans index séparé.
+
+### 3.3 Persistence Doctrine
+
+Pattern **Aggregate ≠ Entity** (cf. [ADR-0003](../adr/0003-aggregate-vs-entity-separation.md)) :
+
+```
+Domain/Model/Session  ↔  Infrastructure/.../Mapper/SessionMapper  ↔  Infrastructure/.../Entity/SessionEntity (Doctrine)
+Domain/Model/Message  ↔  Infrastructure/.../Mapper/MessageMapper  ↔  Infrastructure/.../Entity/MessageEntity
+```
+
+#### Entities Doctrine
+
+| Entité | Table | Colonnes |
+|---|---|---|
+| `SessionEntity` | `assistant_sessions` | `id varchar(64) PK`, `model_name varchar(128)`, `title varchar(255)`, `created_at timestamptz`, `updated_at timestamptz`, `archived boolean default false` |
+| `MessageEntity` | `assistant_messages` | `id varchar(64) PK`, `session_id varchar(64)`, `role varchar(16)`, `content text`, `created_at timestamptz` + index `(session_id, created_at)` |
+
+Mapping par **attributs PHP 8** (`#[ORM\Entity]`, `#[ORM\Column]`, …). Pas de FK déclarée entre `messages` et `sessions` au niveau ORM (volontaire : on garde la flexibilité de purge / archivage indépendante ; la cohérence est garantie au niveau application).
+
+#### Repositories
+
+| Repo | Méthodes | Notes |
+|---|---|---|
+| `DoctrineSessionRepository` | `save` (upsert via `find` + `persist|merge`), `findById`, `all` (ordre `updated_at DESC`), `delete` | |
+| `DoctrineMessageRepository` | `append` (persist + flush immédiat), `forSession` (filtre + `ORDER BY created_at ASC, id ASC`) | append-only ; pas d'update/delete au repo |
+
+### 3.4 Configuration
+
+`config/packages/doctrine.yaml` — mapping `Assistant` :
+
+```yaml
+doctrine:
+    orm:
+        auto_mapping: false
+        mappings:
+            Assistant:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Assistant/Infrastructure/Persistence/Doctrine/Entity'
+                prefix: 'App\Assistant\Infrastructure\Persistence\Doctrine\Entity'
+                alias: Assistant
+```
+
+`config/services.yaml` — bind des Ports vers leurs adapters :
+
+```yaml
+services:
+    App\Assistant\Domain\Port\Clock:
+        alias: App\Assistant\Infrastructure\Clock\SystemClock
+    App\Assistant\Domain\Port\IdGenerator:
+        alias: App\Assistant\Infrastructure\Id\SymfonyUidGenerator
+    App\Assistant\Domain\Port\SessionRepository:
+        alias: App\Assistant\Infrastructure\Persistence\Doctrine\Repository\DoctrineSessionRepository
+    App\Assistant\Domain\Port\MessageRepository:
+        alias: App\Assistant\Infrastructure\Persistence\Doctrine\Repository\DoctrineMessageRepository
+```
+
+Resource `App\:` exclut les classes "non-services" : `Domain/Model/`, `Domain/Exception/`, `Application/Command/*Command.php`, `Application/Query/*Query.php`, `Application/Dto/`, `Infrastructure/Persistence/Doctrine/Entity/`, `Kernel.php`.
+
+### 3.5 Migration
+
+`App/migrations/Version20260530121839.php` — crée `assistant_sessions` + `assistant_messages` + index.
+
+À appliquer après chaque setup :
+
+```bash
+docker compose exec php bin/console doctrine:migrations:migrate -n
+```
+
+### 3.6 `Llm/SymfonyAiOllamaAdapter`
+
+*À venir — STEP-05.* Implémentera `LlmPort` via `symfony/ai-platform` + `symfony/ai-ollama-platform`.
 
 ---
 
