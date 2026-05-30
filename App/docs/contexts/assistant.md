@@ -10,7 +10,8 @@
 | Application | ✅ STEP-03 |
 | Infrastructure persistence | ✅ STEP-04 |
 | Infrastructure LLM (Ollama) | ✅ STEP-05 |
-| UI (CLI + TUI) | ⏳ STEP-06 |
+| UI CLI | ✅ STEP-06 |
+| UI TUI | ⏳ STEP-07 |
 
 ---
 
@@ -304,10 +305,59 @@ Pas de test d'intégration avec Ollama réel dans cette step — la validation e
 
 ## 4. UI (`App/src/Assistant/UI/`)
 
-*À venir — STEP-05.*
+### 4.1 CLI (`Cli/`)
 
-- `Cli/AskCommand` (`assistant:ask "question"`) : one-shot, crée une session jetable et imprime la réponse.
-- `Tui/TuiCommand` (`assistant:tui`) : interface TUI persistante (liste sessions à gauche, chat à droite).
+#### `assistant:ask` — pose une question one-shot ou continue une session
+
+```bash
+# Nouvelle session
+bin/console assistant:ask "Explique-moi le hexagonal en 1 phrase"
+# → Started new session ses_xxx (model=qwen2.5:3b)
+# → You / Assistant transcripts
+# → session=ses_xxx  prompt_tokens=N  completion_tokens=M
+
+# Continuer une session existante
+bin/console assistant:ask "Continue..." --session=ses_xxx
+
+# Override modèle / titre lors de la création
+bin/console assistant:ask "Hello" --model=qwen2.5:7b --title="Big chat"
+```
+
+Options :
+- `--session`/`-s` (string `ses_*`) : continuer une session existante au lieu d'en créer une.
+- `--model`/`-m` (string) : modèle Ollama pour une nouvelle session (défaut : `LLM_MODEL` env).
+- `--title`/`-t` (string) : titre pour une nouvelle session (défaut : `CLI ask`).
+
+Codes retour :
+- `0` ok ; `1` failure (SessionNotFound, LlmUnavailable…) ; `2` invalid input.
+
+Sur `LlmUnavailable`, le message user est **toujours persisté** : la commande indique de re-run avec `--session=…` pour retry.
+
+#### `assistant:sessions` — liste ou affiche
+
+```bash
+# Lister
+bin/console assistant:sessions
+# → table id, title, model, updated_at, archived
+
+# Voir le transcript complet d'une session
+bin/console assistant:sessions ses_xxx
+# → header + user/assistant messages chronologiques avec timestamps
+```
+
+#### Architecture des commandes
+
+Les `*Command` Symfony Console sont des **wrappers très minces** : zéro logique métier, ils ne font que :
+1. Parser l'input.
+2. Construire un `*Command`/`*Query` Application.
+3. Invoquer le `*Handler` correspondant (autowire).
+4. Pretty-print le résultat.
+
+Le defaultModel (`LLM_MODEL` env) est injecté explicitement dans `AskCommand` via `services.yaml`. Les autres dépendances (Handlers, SessionRepository) sont autowired.
+
+### 4.2 TUI (`Tui/`)
+
+*À venir — STEP-07 :* `assistant:tui` interface interactive avec `symfony/tui ^8.1@beta` — liste sessions à gauche, chat à droite, input en bas.
 
 ---
 
