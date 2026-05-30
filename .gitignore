@@ -1,1 +1,10 @@
-*.md
+# Reference material (opencode source, kept local only)
+/opencode-dev.zip
+/_opencode_ref/
+
+# IDE
+/.idea/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -8,3 +8,7 @@
 /var/
 /vendor/
 ###< symfony/framework-bundle ###
+
+# Tooling caches
+/.php-cs-fixer.cache
+/.phpunit.result.cache
