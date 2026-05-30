@@ -11,7 +11,7 @@
 | Infrastructure persistence | ✅ STEP-04 |
 | Infrastructure LLM (Ollama) | ✅ STEP-05 |
 | UI CLI | ✅ STEP-06 |
-| UI TUI | ⏳ STEP-07 |
+| UI TUI | ✅ STEP-07 (validation interactive à faire en TTY réel) |
 
 ---
 
@@ -357,7 +357,60 @@ Le defaultModel (`LLM_MODEL` env) est injecté explicitement dans `AskCommand` v
 
 ### 4.2 TUI (`Tui/`)
 
-*À venir — STEP-07 :* `assistant:tui` interface interactive avec `symfony/tui ^8.1@beta` — liste sessions à gauche, chat à droite, input en bas.
+`UI/Tui/TuiCommand` — interface interactive avec `symfony/tui ^8.1@beta`.
+
+```bash
+# Nouvelle session
+bin/console assistant:tui
+
+# Reprendre une session existante
+bin/console assistant:tui --session=ses_xxx
+
+# Custom model / title
+bin/console assistant:tui --model=qwen2.5:7b --title="Big chat"
+```
+
+**Layout (vertical) :**
+
+```
+┌──────────────────────────────────────────────┐
+│ SebCode TUI — <title> · model=… · ses_…     │  <- header (TextWidget, .header)
+├──────────────────────────────────────────────┤
+│                                              │
+│ ▶ You                                        │
+│ Bonjour !                                    │  <- transcript (ContainerWidget,
+│                                              │     expandVertically, .transcript)
+│ ◀ Assistant                                  │     contient un TextWidget par
+│ Bonjour ! Que puis-je faire ?                │     message
+│                                              │
+├──────────────────────────────────────────────┤
+│ › Tape ton message…                          │  <- input (InputWidget, .input)
+└──────────────────────────────────────────────┘
+```
+
+**Composants Tui utilisés (`symfony/tui`) :**
+- `Tui` (root), `ContainerWidget` (transcript), `TextWidget` (header, lignes), `InputWidget` (saisie).
+- `Padding::xy()`, `Style(background, color)` pour la stylesheet.
+- `InputWidget::onSubmit()` reçoit un `SubmitEvent` quand l'utilisateur tape Entrée.
+
+**Pipeline d'un tour :**
+
+1. User tape un message + Entrée.
+2. Si message = `:q`, `:quit`, `exit`, `quit` → `$tui->stop()`.
+3. Sinon : on append un widget `▶ You … <message>` au transcript.
+4. On append un placeholder `◀ Assistant — (thinking…)`.
+5. `$tui->requestRender()` → l'UI est repeinte immédiatement (l'utilisateur voit le "thinking…").
+6. `EventLoop::queue(...)` — défère l'appel LLM **au prochain tick** pour ne pas bloquer le rendu en cours.
+7. Au tick suivant : appel `SendMessageHandler` (bloquant, mais le rendu "thinking" est déjà affiché).
+8. On `remove()` le placeholder et on `add()` la vraie réponse (ou un widget `⚠ Error` si `LlmUnavailable`).
+9. `requestRender()` à nouveau.
+
+**Limites connues du MVP :**
+
+- **Pas de streaming** — la réponse arrive en bloc une fois le LLM terminé. Pour avoir l'effet "live typing" il faut consommer le stream Ollama (SSE) et utiliser `EditorWidget` ou append progressif au `TextWidget`. À faire dans un STEP ultérieur.
+- **Pas de session sidebar** — une seule session à la fois. Choisir au démarrage via `--session=` ou créer une nouvelle. Pour la liste, utiliser `bin/console assistant:sessions` séparément.
+- **Pas de scroll explicite** — le transcript grandit ; à long terme il faut limiter / scroller. À voir si `Tui::setScrollOffset()` suffit.
+- **Quit par commande tapée** (`:q`, `exit`, etc.). Le Ctrl+C par défaut de `symfony/tui` devrait aussi arrêter proprement.
 
 ---
 

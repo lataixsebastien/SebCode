@@ -45,3 +45,7 @@ services:
     App\Assistant\UI\Cli\AskCommand:
         arguments:
             $defaultModel: '%env(LLM_MODEL)%'
+
+    App\Assistant\UI\Tui\TuiCommand:
+        arguments:
+            $defaultModel: '%env(LLM_MODEL)%'
