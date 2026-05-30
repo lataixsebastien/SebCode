@@ -49,3 +49,19 @@ services:
     App\Assistant\UI\Tui\TuiCommand:
         arguments:
             $defaultModel: '%env(LLM_MODEL)%'
+
+    # ─── Tool bounded context: auto-tag implementations + locator-backed registry ───
+
+    _instanceof:
+        App\Tool\Domain\Port\Tool:
+            tags: ['app.tool']
+
+    App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry:
+        arguments:
+            $tools: !tagged_iterator 'app.tool'
+            $locator: !service_locator
+                glob: '@App\Tool\Infrastructure\Tool\GlobTool'
+                read: '@App\Tool\Infrastructure\Tool\ReadTool'
+
+    App\Tool\Domain\Port\ToolRegistry:
+        alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
