@@ -38,9 +38,9 @@ App/src/
 
 | Contexte | Rôle | Statut |
 |---|---|---|
-| `Assistant` | chat avec un LLM, sessions, messages | en cours (Domain ✅) |
-| `Tool` | outils du modèle : read/write/edit/shell/glob/grep/lsp/webfetch | à venir |
-| `Agent` | boucle d'orchestration multi-tool, sub-agents | à venir |
+| `Assistant` | chat avec un LLM, sessions, messages | ✅ foundation complète (Domain/Application/Infra/UI CLI+TUI) |
+| `Tool` | outils du modèle : read/write/edit/shell/glob/grep/lsp/webfetch | 🟡 Domain + Application ✅ STEP-09 ; outils concrets STEP-10 |
+| `Agent` | boucle d'orchestration multi-tool, sub-agents | à venir (la boucle vit dans `Assistant/Application` pour l'instant — ADR-0005) |
 | `Workspace` | projet courant, git, snapshot | à venir |
 
 ## 3. Layers et règles de dépendance
