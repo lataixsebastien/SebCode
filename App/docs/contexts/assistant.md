@@ -7,8 +7,8 @@
 | Layer | Statut |
 |---|---|
 | Domain | ✅ STEP-02 |
-| Application | ✅ STEP-03 |
-| Infrastructure persistence | ✅ STEP-04 |
+| Application | ✅ STEP-03 + boucle agentique tool calling STEP-12 |
+| Infrastructure persistence | ✅ STEP-04 + colonne `payload_json` STEP-12 |
 | Infrastructure LLM (Ollama) | ✅ STEP-05 + tool calling support STEP-11 |
 | UI CLI | ✅ STEP-06 |
 | UI TUI | ✅ STEP-07 (validation interactive à faire en TTY réel) |

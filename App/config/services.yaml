@@ -65,3 +65,12 @@ services:
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
+
+    # ─── Tool ↔ Assistant bridge (the ONE place Assistant imports Tool\) ───
+
+    App\Assistant\Infrastructure\Tool\AssistantToolGatewayAdapter:
+        arguments:
+            $projectRoot: '%kernel.project_dir%'
+
+    App\Assistant\Domain\Port\ToolGateway:
+        alias: App\Assistant\Infrastructure\Tool\AssistantToolGatewayAdapter

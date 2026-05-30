@@ -16,6 +16,7 @@ use Symfony\AI\Platform\Message\AssistantMessage;
 use Symfony\AI\Platform\Message\Content\Text;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\ToolCallMessage;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\TextResult;
@@ -110,10 +111,23 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
                 MessageRole::System => new SystemMessage($message->content->text),
                 MessageRole::User => new UserMessage(new Text($message->content->text)),
                 MessageRole::Assistant => new AssistantMessage(new Text($message->content->text)),
-                MessageRole::Tool => throw LlmUnavailable::fromUpstream('Tool result messages in conversation history are not supported yet — wire MessagePayload + tool-result translation in STEP-12.'),
+                MessageRole::Tool => $this->toToolCallMessage($message),
             });
         }
 
         return $bag;
+    }
+
+    private function toToolCallMessage(Message $message): ToolCallMessage
+    {
+        $payload = $message->payload;
+        if (null === $payload || null === $payload->toolCallId || null === $payload->toolName) {
+            throw LlmUnavailable::fromUpstream('Tool role message is missing a tool-result payload; cannot translate to the LLM contract.');
+        }
+
+        return new ToolCallMessage(
+            new ToolCall($payload->toolCallId, $payload->toolName),
+            $payload->toolOutput ?? '',
+        );
     }
 }

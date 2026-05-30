@@ -26,4 +26,11 @@ class MessageEntity
 
     #[ORM\Column(name: 'created_at', type: 'datetimetz_immutable')]
     public \DateTimeImmutable $createdAt;
+
+    /**
+     * JSON-encoded tool-calling payload, see MessagePayload + MessageMapper.
+     * NULL for plain text messages (user, system, plain assistant turns).
+     */
+    #[ORM\Column(name: 'payload_json', type: 'text', nullable: true)]
+    public ?string $payloadJson = null;
 }

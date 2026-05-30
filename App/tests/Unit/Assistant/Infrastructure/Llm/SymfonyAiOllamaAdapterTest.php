@@ -105,14 +105,17 @@ final class SymfonyAiOllamaAdapterTest extends TestCase
         );
     }
 
-    public function testRejectsToolRoleUntilToolsAreSupported(): void
+    public function testRejectsToolRoleMessageWithoutPayload(): void
     {
         $platform = new RecordingPlatform(new TextResult('ignored'));
         $adapter = new SymfonyAiOllamaAdapter($platform);
 
         $this->expectException(LlmUnavailable::class);
-        $this->expectExceptionMessageMatches('/Tool result messages/');
+        $this->expectExceptionMessageMatches('/missing a tool-result payload/');
 
+        // A Tool-role message without a MessagePayload is an invalid state we
+        // refuse to silently swallow — the SendMessageHandler always attaches
+        // a payload when it persists Tool messages (see STEP-12).
         $adapter->complete(
             ModelName::of('qwen2.5:3b'),
             [$this->msg(MessageRole::Tool, 'some-tool-result')],
