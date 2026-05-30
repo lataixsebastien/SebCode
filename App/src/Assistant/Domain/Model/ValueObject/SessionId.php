@@ -11,9 +11,7 @@ final readonly class SessionId implements \Stringable
     private function __construct(public string $value)
     {
         if (!str_starts_with($value, self::PREFIX)) {
-            throw new \InvalidArgumentException(
-                \sprintf('SessionId must start with "%s", got "%s".', self::PREFIX, $value),
-            );
+            throw new \InvalidArgumentException(\sprintf('SessionId must start with "%s", got "%s".', self::PREFIX, $value));
         }
         if (\strlen($value) <= \strlen(self::PREFIX)) {
             throw new \InvalidArgumentException('SessionId body cannot be empty.');

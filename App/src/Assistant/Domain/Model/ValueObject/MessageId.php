@@ -11,9 +11,7 @@ final readonly class MessageId implements \Stringable
     private function __construct(public string $value)
     {
         if (!str_starts_with($value, self::PREFIX)) {
-            throw new \InvalidArgumentException(
-                \sprintf('MessageId must start with "%s", got "%s".', self::PREFIX, $value),
-            );
+            throw new \InvalidArgumentException(\sprintf('MessageId must start with "%s", got "%s".', self::PREFIX, $value));
         }
         if (\strlen($value) <= \strlen(self::PREFIX)) {
             throw new \InvalidArgumentException('MessageId body cannot be empty.');

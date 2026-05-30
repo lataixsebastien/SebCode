@@ -101,8 +101,9 @@ final class TuiCommand extends Command
             return SessionId::fromString($existing);
         }
 
-        $model = (string) $input->getOption('model');
-        $title = (string) $input->getOption('title');
+        $model = $input->getOption('model');
+        $title = $input->getOption('title');
+        \assert(\is_string($model) && \is_string($title));
         $sessionId = ($this->startSession)(new StartSessionCommand(ModelName::of($model), $title));
         $io->writeln(\sprintf('<info>Started new session %s (model=%s)</info>', $sessionId->value, $model));
 

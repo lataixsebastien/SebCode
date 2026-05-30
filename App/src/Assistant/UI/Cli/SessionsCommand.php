@@ -46,7 +46,9 @@ final class SessionsCommand extends Command
             return $this->listSessions($io);
         }
 
-        return $this->showSession($io, (string) $sessionArg);
+        \assert(\is_string($sessionArg));
+
+        return $this->showSession($io, $sessionArg);
     }
 
     private function listSessions(SymfonyStyle $io): int

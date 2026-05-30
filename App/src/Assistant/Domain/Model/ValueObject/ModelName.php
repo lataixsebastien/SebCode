@@ -6,11 +6,15 @@ namespace App\Assistant\Domain\Model\ValueObject;
 
 final readonly class ModelName implements \Stringable
 {
-    public function __construct(public string $value)
+    /** @var non-empty-string */
+    public string $value;
+
+    public function __construct(string $value)
     {
         if ('' === trim($value)) {
             throw new \InvalidArgumentException('ModelName cannot be empty.');
         }
+        $this->value = $value;
     }
 
     public static function of(string $value): self

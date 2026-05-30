@@ -1,0 +1,71 @@
+deptrac:
+    paths:
+        - ./src
+
+    exclude_files: []
+
+    layers:
+        # ─── Hexagonal layers (per bounded context) ───
+        - name: Domain
+          collectors:
+              - type: classLike
+                value: ^App\\[^\\]+\\Domain\\.*$
+
+        - name: Application
+          collectors:
+              - type: classLike
+                value: ^App\\[^\\]+\\Application\\.*$
+
+        - name: Infrastructure
+          collectors:
+              - type: classLike
+                value: ^App\\[^\\]+\\Infrastructure\\.*$
+
+        - name: UI
+          collectors:
+              - type: classLike
+                value: ^App\\[^\\]+\\UI\\.*$
+
+        # ─── External vendors we enforce against the Domain ───
+        # NOTE: order matters — AiPlatform regex (Symfony\AI\…) is a subset of
+        # the broader Symfony regex, but Deptrac assigns each token to the
+        # first matching layer in this list. Put the more specific layer first.
+        - name: AiPlatform
+          collectors:
+              - type: classLike
+                value: ^Symfony\\AI\\.*$
+
+        - name: Symfony
+          collectors:
+              - type: classLike
+                value: ^Symfony\\.*$
+
+        - name: Doctrine
+          collectors:
+              - type: classLike
+                value: ^Doctrine\\.*$
+
+    ruleset:
+        # Domain: pure PHP. Nothing else.
+        Domain: ~
+
+        # Application: only the Domain of its context.
+        Application:
+            - Domain
+
+        # Infrastructure: implements Domain ports, may use Symfony / Doctrine / AI.
+        Infrastructure:
+            - Domain
+            - Application
+            - Symfony
+            - Doctrine
+            - AiPlatform
+
+        # UI: thin layer over Application. Never touches Infrastructure directly.
+        UI:
+            - Domain
+            - Application
+            - Symfony
+            - AiPlatform
+
+    skip_violations: []

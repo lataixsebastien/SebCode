@@ -43,10 +43,7 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
         }
 
         if (!$result instanceof TextResult) {
-            throw LlmUnavailable::fromUpstream(\sprintf(
-                'Unexpected result type %s returned by LLM platform; expected TextResult.',
-                $result::class,
-            ));
+            throw LlmUnavailable::fromUpstream(\sprintf('Unexpected result type %s returned by LLM platform; expected TextResult.', $result::class));
         }
 
         $promptTokens = null;
@@ -71,9 +68,7 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
                 MessageRole::System => new SystemMessage($message->content->text),
                 MessageRole::User => new UserMessage(new Text($message->content->text)),
                 MessageRole::Assistant => new AssistantMessage(new Text($message->content->text)),
-                MessageRole::Tool => throw LlmUnavailable::fromUpstream(
-                    'Tool messages are not yet supported in the conversation history.',
-                ),
+                MessageRole::Tool => throw LlmUnavailable::fromUpstream('Tool messages are not yet supported in the conversation history.'),
             });
         }
 
