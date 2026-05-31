@@ -1,6 +1,11 @@
 # yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
 
 parameters:
+    # Permission ruleset for the Tool context (STEP-14). Each row is
+    # { type, pattern, action } with type/pattern as fnmatch globs and action
+    # one of allow|deny|ask. Empty for now: with no rule every guarded action
+    # evaluates to "ask" and falls through to the default prompter decision.
+    tool.permission.rules: []
 
 services:
     _defaults:
@@ -65,6 +70,26 @@ services:
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
+
+    # ─── Tool permission layer (STEP-14): ruleset + gate + default prompter ───
+    # Dormant for now — no tool calls PermissionGate yet (read-only tools need
+    # no permission). First consumers land in STEP-15 (write/edit).
+
+    App\Tool\Domain\Model\PermissionRuleset:
+        factory: ['App\Tool\Infrastructure\Permission\RulesetFactory', 'fromConfig']
+        arguments:
+            $rules: '%tool.permission.rules%'
+
+    App\Tool\Infrastructure\Permission\ConfigDefaultPermissionPrompter:
+        factory: ['App\Tool\Infrastructure\Permission\ConfigDefaultPermissionPrompter', 'fromString']
+        arguments:
+            $default: '%env(TOOL_PERMISSION_DEFAULT)%'
+
+    App\Tool\Domain\Port\PermissionPrompter:
+        alias: App\Tool\Infrastructure\Permission\ConfigDefaultPermissionPrompter
+
+    App\Tool\Domain\Port\PermissionGate:
+        alias: App\Tool\Infrastructure\Permission\RulesetPermissionGate
 
     # ─── Tool ↔ Assistant bridge (the ONE place Assistant imports Tool\) ───
 
