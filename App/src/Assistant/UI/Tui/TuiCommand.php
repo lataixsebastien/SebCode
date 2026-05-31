@@ -203,6 +203,31 @@ final class TuiCommand extends Command
 
     private function appendMessageWidget(ContainerWidget $transcript, Message $message): void
     {
+        $payload = $message->payload;
+
+        if (null !== $payload && \App\Assistant\Domain\Model\ValueObject\MessagePayloadKind::ToolCall === $payload->kind) {
+            foreach ($payload->toolCalls as $call) {
+                $args = [] === $call->arguments
+                    ? ''
+                    : (string) json_encode($call->arguments, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+                $this->appendLine($transcript, \sprintf('🔧 %s(%s)', $call->name, $args), '', 'thinking');
+            }
+
+            return;
+        }
+
+        if (null !== $payload && \App\Assistant\Domain\Model\ValueObject\MessagePayloadKind::ToolResult === $payload->kind) {
+            $marker = $payload->isError ? '⚠' : '✓';
+            $this->appendLine(
+                $transcript,
+                \sprintf('   %s %s', $marker, $payload->toolName ?? '?'),
+                (string) ($payload->toolOutput ?? ''),
+                $payload->isError ? 'error' : 'thinking',
+            );
+
+            return;
+        }
+
         [$marker, $class] = match ($message->role) {
             MessageRole::User => [self::MARKER_USER, 'user'],
             MessageRole::Assistant => [self::MARKER_ASSISTANT, 'assistant'],

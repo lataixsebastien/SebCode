@@ -8,10 +8,14 @@ use App\Assistant\Application\Command\SendMessageCommand;
 use App\Assistant\Application\Command\SendMessageHandler;
 use App\Assistant\Application\Command\StartSessionCommand;
 use App\Assistant\Application\Command\StartSessionHandler;
+use App\Assistant\Domain\Exception\AgentLoopExceeded;
 use App\Assistant\Domain\Exception\LlmUnavailable;
 use App\Assistant\Domain\Exception\SessionNotFound;
+use App\Assistant\Domain\Model\Message;
+use App\Assistant\Domain\Model\ValueObject\MessagePayloadKind;
 use App\Assistant\Domain\Model\ValueObject\ModelName;
 use App\Assistant\Domain\Model\ValueObject\SessionId;
+use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -92,6 +96,15 @@ final class AskCommand extends Command
             $io->note('Your message was persisted — re-run with --session='.$sessionId->value.' to retry.');
 
             return Command::FAILURE;
+        } catch (AgentLoopExceeded $e) {
+            $io->error($e->getMessage());
+            $io->note('Inspect what happened: bin/console assistant:sessions '.$sessionId->value);
+
+            return Command::FAILURE;
+        }
+
+        foreach ($result->intermediateMessages as $intermediate) {
+            $this->renderIntermediate($io, $intermediate);
         }
 
         $io->section('Assistant');
@@ -106,6 +119,55 @@ final class AskCommand extends Command
         ));
 
         return Command::SUCCESS;
+    }
+
+    private function renderIntermediate(SymfonyStyle $io, Message $message): void
+    {
+        $payload = $message->payload;
+        if (null === $payload) {
+            // System nudge or other plain intermediate — just print one line.
+            $io->writeln(\sprintf('<comment>[%s]</comment> %s', $message->role->value, $message->content->text));
+
+            return;
+        }
+
+        if (MessagePayloadKind::ToolCall === $payload->kind) {
+            foreach ($payload->toolCalls as $call) {
+                $io->writeln(\sprintf(
+                    '<info>🔧 %s(%s)</info>',
+                    $call->name,
+                    $this->renderArguments($call),
+                ));
+            }
+
+            return;
+        }
+
+        // Tool result — green check / red cross + truncated output.
+        $marker = $payload->isError ? '<error>⚠</error>' : '<info>✓</info>';
+        $output = $payload->toolOutput ?? '';
+        $io->writeln(\sprintf(
+            '   %s %s → %s',
+            $marker,
+            $payload->toolName ?? '?',
+            $this->oneLine($output),
+        ));
+    }
+
+    private function renderArguments(ToolCallRequest $call): string
+    {
+        if ([] === $call->arguments) {
+            return '';
+        }
+
+        return (string) json_encode($call->arguments, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+    }
+
+    private function oneLine(string $output): string
+    {
+        $oneLine = trim(preg_replace('/\s+/', ' ', $output) ?? '');
+
+        return mb_strlen($oneLine) > 140 ? mb_substr($oneLine, 0, 137).'...' : $oneLine;
     }
 
     private function resolveSessionId(InputInterface $input, SymfonyStyle $io): SessionId
