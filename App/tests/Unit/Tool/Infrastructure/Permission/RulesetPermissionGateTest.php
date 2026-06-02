@@ -11,6 +11,7 @@ use App\Tool\Domain\Model\PermissionRuleset;
 use App\Tool\Domain\Model\ValueObject\PermissionAction;
 use App\Tool\Domain\Model\ValueObject\PermissionRequest;
 use App\Tool\Domain\Model\ValueObject\PermissionType;
+use App\Tool\Infrastructure\Permission\InMemoryPermissionGrants;
 use App\Tool\Infrastructure\Permission\RulesetPermissionGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -24,6 +25,7 @@ final class RulesetPermissionGateTest extends TestCase
         $gate = new RulesetPermissionGate(
             new PermissionRuleset([new PermissionRule('edit', '*', PermissionAction::Allow)]),
             $prompter,
+            new InMemoryPermissionGrants(),
         );
 
         $gate->ensure(new PermissionRequest(PermissionType::Edit, ['src/a.php']));
@@ -37,6 +39,7 @@ final class RulesetPermissionGateTest extends TestCase
         $gate = new RulesetPermissionGate(
             new PermissionRuleset([new PermissionRule('bash', '*', PermissionAction::Deny)]),
             $prompter,
+            new InMemoryPermissionGrants(),
         );
 
         $this->expectException(PermissionDenied::class);
@@ -51,7 +54,7 @@ final class RulesetPermissionGateTest extends TestCase
     public function testAskDelegatesToPrompterAllow(): void
     {
         $prompter = new FakePermissionPrompter(PermissionAction::Allow);
-        $gate = new RulesetPermissionGate(new PermissionRuleset(), $prompter);
+        $gate = new RulesetPermissionGate(new PermissionRuleset(), $prompter, new InMemoryPermissionGrants());
 
         $gate->ensure(new PermissionRequest(PermissionType::Edit, ['src/a.php']));
 
@@ -64,6 +67,7 @@ final class RulesetPermissionGateTest extends TestCase
         $gate = new RulesetPermissionGate(
             new PermissionRuleset(),
             new FakePermissionPrompter(PermissionAction::Deny),
+            new InMemoryPermissionGrants(),
         );
 
         $this->expectException(PermissionDenied::class);
@@ -77,10 +81,24 @@ final class RulesetPermissionGateTest extends TestCase
         $gate = new RulesetPermissionGate(
             new PermissionRuleset([new PermissionRule('edit', 'allowed/**', PermissionAction::Allow)]),
             new FakePermissionPrompter(PermissionAction::Deny),
+            new InMemoryPermissionGrants(),
         );
 
         $this->expectException(PermissionDenied::class);
 
         $gate->ensure(new PermissionRequest(PermissionType::Edit, ['allowed/a.php', 'other/b.php']));
+    }
+
+    public function testRuntimeGrantShortCircuitsThePrompter(): void
+    {
+        $prompter = new FakePermissionPrompter(PermissionAction::Deny);
+        $grants = new InMemoryPermissionGrants();
+        $grants->grant(PermissionType::Bash, 'git *');
+
+        $gate = new RulesetPermissionGate(new PermissionRuleset(), $prompter, $grants);
+
+        $gate->ensure(new PermissionRequest(PermissionType::Bash, ['git status']));
+
+        self::assertSame([], $prompter->prompts, 'A matching runtime grant must skip the prompter.');
     }
 }

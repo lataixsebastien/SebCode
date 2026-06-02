@@ -22,6 +22,15 @@ final readonly class PermissionRequest
     public array $patterns;
 
     /**
+     * Wildcard patterns persisted if the human answers "always" — e.g. `git *`
+     * for a `git status` command. Mirrors opencode's `always` on the request.
+     * Defaults to {@see $patterns} so an exact-subject grant is the fallback.
+     *
+     * @var list<string>
+     */
+    public array $always;
+
+    /**
      * @var array<string, mixed>
      */
     public array $metadata;
@@ -29,11 +38,13 @@ final readonly class PermissionRequest
     /**
      * @param list<string> $patterns concrete subjects to authorize (≥1, non-empty strings)
      * @param array<string, mixed> $metadata free-form context for the prompter (e.g. a diff)
+     * @param list<string>|null $always patterns to remember on "always" (defaults to $patterns)
      */
     public function __construct(
         public PermissionType $type,
         array $patterns,
         array $metadata = [],
+        ?array $always = null,
     ) {
         if ([] === $patterns) {
             throw new \InvalidArgumentException('PermissionRequest requires at least one pattern.');
@@ -44,7 +55,15 @@ final readonly class PermissionRequest
             }
         }
 
+        $always ??= $patterns;
+        foreach ($always as $pattern) {
+            if ('' === $pattern) {
+                throw new \InvalidArgumentException('PermissionRequest "always" patterns must be non-empty strings.');
+            }
+        }
+
         $this->patterns = $patterns;
+        $this->always = $always;
         $this->metadata = $metadata;
     }
 }

@@ -16,6 +16,7 @@ use App\Assistant\Domain\Model\ValueObject\MessagePayloadKind;
 use App\Assistant\Domain\Model\ValueObject\ModelName;
 use App\Assistant\Domain\Model\ValueObject\SessionId;
 use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
+use App\Tool\Domain\Port\PermissionConsoleRegistry;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -33,6 +34,7 @@ final class AskCommand extends Command
     public function __construct(
         private readonly StartSessionHandler $startSession,
         private readonly SendMessageHandler $sendMessage,
+        private readonly PermissionConsoleRegistry $consoles,
         private readonly string $defaultModel,
     ) {
         parent::__construct();
@@ -85,6 +87,11 @@ final class AskCommand extends Command
         $io->section('You');
         $io->writeln($question);
 
+        // Let mutating tools (write/edit/bash) prompt this terminal for
+        // permission, deep in the synchronous agent loop. Detached in finally
+        // so the shared registry never leaks a stale console to the next run.
+        $this->consoles->attach(new ConsolePermissionConsole($io, $input->isInteractive()));
+
         try {
             $result = ($this->sendMessage)(new SendMessageCommand($sessionId, $question));
         } catch (SessionNotFound $e) {
@@ -101,6 +108,8 @@ final class AskCommand extends Command
             $io->note('Inspect what happened: bin/console assistant:sessions '.$sessionId->value);
 
             return Command::FAILURE;
+        } finally {
+            $this->consoles->detach();
         }
 
         foreach ($result->intermediateMessages as $intermediate) {

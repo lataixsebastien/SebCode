@@ -75,13 +75,16 @@ services:
                 read: '@App\Tool\Infrastructure\Tool\ReadTool'
                 write: '@App\Tool\Infrastructure\Tool\WriteTool'
                 edit: '@App\Tool\Infrastructure\Tool\EditTool'
+                bash: '@App\Tool\Infrastructure\Tool\ShellTool'
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
 
-    # ─── Tool permission layer (STEP-14): ruleset + gate + default prompter ───
-    # Dormant for now — no tool calls PermissionGate yet (read-only tools need
-    # no permission). First consumers land in STEP-15 (write/edit).
+    # ─── Tool permission layer (STEP-14/16): ruleset + gate + prompter ───
+    # Consumed by write/edit (type edit) and bash (type bash). The gate also
+    # reads runtime grants ("always" replies). The interactive prompter asks
+    # the live console (STEP-16, CLI) and falls back to the config default when
+    # no UI is attached (headless / one-shot / tests).
 
     App\Tool\Domain\Model\PermissionRuleset:
         factory: ['App\Tool\Infrastructure\Permission\RulesetFactory', 'fromConfig']
@@ -93,8 +96,25 @@ services:
         arguments:
             $default: '%env(TOOL_PERMISSION_DEFAULT)%'
 
+    # Interactive prompter: prompts the live console, else defers to the default.
+    App\Tool\Infrastructure\Permission\InteractivePermissionPrompter:
+        arguments:
+            $fallback: '@App\Tool\Infrastructure\Permission\ConfigDefaultPermissionPrompter'
+
     App\Tool\Domain\Port\PermissionPrompter:
-        alias: App\Tool\Infrastructure\Permission\ConfigDefaultPermissionPrompter
+        alias: App\Tool\Infrastructure\Permission\InteractivePermissionPrompter
+
+    App\Tool\Domain\Port\PermissionConsole:
+        alias: App\Tool\Infrastructure\Permission\NullPermissionConsole
+
+    App\Tool\Domain\Port\PermissionConsoleRegistry:
+        alias: App\Tool\Infrastructure\Permission\MutablePermissionConsoleRegistry
+
+    App\Tool\Domain\Port\PermissionGrants:
+        alias: App\Tool\Infrastructure\Permission\InMemoryPermissionGrants
+
+    App\Tool\Domain\Port\CommandRunner:
+        alias: App\Tool\Infrastructure\Process\ProcOpenCommandRunner
 
     App\Tool\Domain\Port\PermissionGate:
         alias: App\Tool\Infrastructure\Permission\RulesetPermissionGate
