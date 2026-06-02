@@ -72,6 +72,7 @@ services:
             $tools: !tagged_iterator 'app.tool'
             $locator: !service_locator
                 glob: '@App\Tool\Infrastructure\Tool\GlobTool'
+                grep: '@App\Tool\Infrastructure\Tool\GrepTool'
                 read: '@App\Tool\Infrastructure\Tool\ReadTool'
                 write: '@App\Tool\Infrastructure\Tool\WriteTool'
                 edit: '@App\Tool\Infrastructure\Tool\EditTool'
