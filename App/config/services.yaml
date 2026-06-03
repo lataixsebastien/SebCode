@@ -88,6 +88,7 @@ services:
                 todowrite: '@App\Tool\Infrastructure\Tool\TodoWriteTool'
                 apply_patch: '@App\Tool\Infrastructure\Tool\ApplyPatchTool'
                 task: '@App\Tool\Infrastructure\Tool\TaskTool'
+                lsp: '@App\Tool\Infrastructure\Tool\LspTool'
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
@@ -138,6 +139,14 @@ services:
 
     App\Tool\Domain\Port\CommandRunner:
         alias: App\Tool\Infrastructure\Process\ProcOpenCommandRunner
+
+    # `lsp` tool diagnostics backend: php -l + phpstan (STEP-26).
+    App\Tool\Infrastructure\Diagnostics\PhpDiagnosticsProvider:
+        arguments:
+            $projectRoot: '%kernel.project_dir%'
+
+    App\Tool\Domain\Port\DiagnosticsProvider:
+        alias: App\Tool\Infrastructure\Diagnostics\PhpDiagnosticsProvider
 
     App\Tool\Domain\Port\PermissionGate:
         alias: App\Tool\Infrastructure\Permission\RulesetPermissionGate
