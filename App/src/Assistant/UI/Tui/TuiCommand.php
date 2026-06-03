@@ -16,6 +16,7 @@ use App\Assistant\Domain\Model\ValueObject\MessageRole;
 use App\Assistant\Domain\Model\ValueObject\ModelName;
 use App\Assistant\Domain\Model\ValueObject\SessionId;
 use App\Assistant\Domain\Port\SessionRepository;
+use App\Tool\Domain\Port\PermissionConsoleRegistry;
 use Revolt\EventLoop;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -48,6 +49,7 @@ final class TuiCommand extends Command
         private readonly StartSessionHandler $startSession,
         private readonly SendMessageHandler $sendMessage,
         private readonly GetSessionMessagesHandler $getMessages,
+        private readonly PermissionConsoleRegistry $consoles,
         private readonly string $defaultModel,
     ) {
         parent::__construct();
@@ -89,7 +91,19 @@ final class TuiCommand extends Command
             $this->appendMessageWidget($transcript, $msg);
         }
 
-        $tui->run();
+        // Let mutating tools (write/edit/bash) prompt this terminal for
+        // permission from deep in the (blocked) agent loop. Detached in finally
+        // so the shared registry never leaks a stale console.
+        $console = new TuiPermissionConsole($tui, $transcript);
+        $console->activate();
+        $this->consoles->attach($console);
+
+        try {
+            $tui->run();
+        } finally {
+            $this->consoles->detach();
+            $console->deactivate();
+        }
 
         return Command::SUCCESS;
     }
@@ -119,6 +133,7 @@ final class TuiCommand extends Command
             '.user' => new Style(color: '#60a5fa'),
             '.assistant' => new Style(color: '#34d399'),
             '.thinking' => new Style(color: '#fbbf24'),
+            '.permission' => new Style(padding: Padding::xy(1, 0), background: '#3b2f0b', color: '#fde68a'),
             '.error' => new Style(color: '#f87171'),
             '.input' => new Style(padding: Padding::xy(1, 0), background: '#1f2937', color: '#e5e7eb'),
         ]);
