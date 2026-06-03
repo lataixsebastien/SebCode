@@ -77,6 +77,7 @@ services:
                 write: '@App\Tool\Infrastructure\Tool\WriteTool'
                 edit: '@App\Tool\Infrastructure\Tool\EditTool'
                 bash: '@App\Tool\Infrastructure\Tool\ShellTool'
+                todowrite: '@App\Tool\Infrastructure\Tool\TodoWriteTool'
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
@@ -113,6 +114,11 @@ services:
 
     App\Tool\Domain\Port\PermissionGrants:
         alias: App\Tool\Infrastructure\Permission\InMemoryPermissionGrants
+
+    # Agent todo list (STEP-19): in-memory, process-lifetime — one process = one
+    # session today (see TodoStore docblock).
+    App\Tool\Domain\Port\TodoStore:
+        alias: App\Tool\Infrastructure\Todo\InMemoryTodoStore
 
     App\Tool\Domain\Port\CommandRunner:
         alias: App\Tool\Infrastructure\Process\ProcOpenCommandRunner
