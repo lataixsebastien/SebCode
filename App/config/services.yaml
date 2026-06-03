@@ -122,8 +122,14 @@ services:
     App\Tool\Domain\Port\PermissionConsoleRegistry:
         alias: App\Tool\Infrastructure\Permission\MutablePermissionConsoleRegistry
 
+    # Persisted per project (STEP-25): an "always" choice survives across runs.
+    # InMemoryPermissionGrants stays for unit tests.
+    App\Tool\Infrastructure\Persistence\Doctrine\Repository\DoctrinePermissionGrants:
+        arguments:
+            $projectRoot: '%kernel.project_dir%'
+
     App\Tool\Domain\Port\PermissionGrants:
-        alias: App\Tool\Infrastructure\Permission\InMemoryPermissionGrants
+        alias: App\Tool\Infrastructure\Persistence\Doctrine\Repository\DoctrinePermissionGrants
 
     # Agent todo list: persisted per session in Postgres (STEP-23). The
     # in-memory store stays for unit tests / as a fallback.

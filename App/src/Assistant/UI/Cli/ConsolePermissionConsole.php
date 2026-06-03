@@ -44,7 +44,7 @@ final readonly class ConsolePermissionConsole implements PermissionConsole
 
         $answer = $this->io->choice('Allow?', [
             PermissionChoice::AllowOnce->value => 'Allow once',
-            PermissionChoice::AllowAlways->value => 'Allow always (this session)',
+            PermissionChoice::AllowAlways->value => 'Allow always (this project)',
             PermissionChoice::Reject->value => 'Reject',
         ], PermissionChoice::Reject->value);
 

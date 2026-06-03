@@ -62,7 +62,7 @@ final class TuiPermissionConsole implements PermissionConsole
         if (\is_string($description) && '' !== $description) {
             $text .= "\n".$description;
         }
-        $text .= "\n".$subject."\n[o] allow once    [a] allow always (session)    [r] reject";
+        $text .= "\n".$subject."\n[o] allow once    [a] allow always (project)    [r] reject";
 
         $prompt = $this->paint($text);
         $choice = $this->readChoice();
@@ -127,7 +127,7 @@ final class TuiPermissionConsole implements PermissionConsole
     {
         return match ($choice) {
             PermissionChoice::AllowOnce => 'allowed once',
-            PermissionChoice::AllowAlways => 'allowed (session)',
+            PermissionChoice::AllowAlways => 'allowed (project)',
             PermissionChoice::Reject => 'rejected',
         };
     }
