@@ -87,6 +87,7 @@ services:
                 bash: '@App\Tool\Infrastructure\Tool\ShellTool'
                 todowrite: '@App\Tool\Infrastructure\Tool\TodoWriteTool'
                 apply_patch: '@App\Tool\Infrastructure\Tool\ApplyPatchTool'
+                task: '@App\Tool\Infrastructure\Tool\TaskTool'
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
@@ -143,3 +144,11 @@ services:
 
     App\Assistant\Domain\Port\ToolGateway:
         alias: App\Assistant\Infrastructure\Tool\AssistantToolGatewayAdapter
+
+    # Second bridge: the `task` tool's nested agent loop (Tool port, Assistant impl).
+    App\Assistant\Infrastructure\SubAgent\AssistantSubAgentRunner:
+        arguments:
+            $defaultModel: '%env(LLM_MODEL)%'
+
+    App\Tool\Domain\Port\SubAgentRunner:
+        alias: App\Assistant\Infrastructure\SubAgent\AssistantSubAgentRunner
