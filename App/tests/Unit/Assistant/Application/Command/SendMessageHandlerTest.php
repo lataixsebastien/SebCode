@@ -20,6 +20,7 @@ use App\Assistant\Domain\Model\ValueObject\ToolAdvertisement;
 use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
 use App\Assistant\Domain\Model\ValueObject\ToolResultDto;
 use App\Tests\Support\Assistant\Doubles\FixedClock;
+use App\Tests\Support\Assistant\Doubles\FixedSystemPrompt;
 use App\Tests\Support\Assistant\Doubles\InMemoryMessageRepository;
 use App\Tests\Support\Assistant\Doubles\InMemorySessionRepository;
 use App\Tests\Support\Assistant\Doubles\RecordingToolGateway;
@@ -57,6 +58,7 @@ final class SendMessageHandlerTest extends TestCase
             $this->toolGateway,
             $this->ids,
             $this->clock,
+            new FixedSystemPrompt('SYSTEM PROMPT'),
         );
 
         $this->sessionId = SessionId::fromString('ses_existing');
@@ -99,9 +101,12 @@ final class SendMessageHandlerTest extends TestCase
         self::assertCount(1, $calls);
         self::assertSame('qwen2.5:3b', $calls[0]['model']->value);
         $conversation = $calls[0]['conversation'];
-        self::assertCount(1, $conversation, 'LLM should see only the freshly-appended user message on first turn');
-        self::assertSame(MessageRole::User, $conversation[0]->role);
-        self::assertSame('first question', $conversation[0]->content->text);
+        // The system prompt always leads, then the freshly-appended user message.
+        self::assertCount(2, $conversation);
+        self::assertSame(MessageRole::System, $conversation[0]->role);
+        self::assertSame('SYSTEM PROMPT', $conversation[0]->content->text);
+        self::assertSame(MessageRole::User, $conversation[1]->role);
+        self::assertSame('first question', $conversation[1]->content->text);
     }
 
     public function testSecondTurnSendsCompleteHistoryToLlm(): void
@@ -116,8 +121,9 @@ final class SendMessageHandlerTest extends TestCase
         $calls = $this->llm->calls();
         self::assertCount(2, $calls);
         $secondHistory = $calls[1]['conversation'];
-        self::assertCount(3, $secondHistory, 'second LLM call should see Q1, A1 and the new Q2');
+        self::assertCount(4, $secondHistory, 'second LLM call should see the system prompt then Q1, A1, Q2');
         self::assertSame([
+            [MessageRole::System, 'SYSTEM PROMPT'],
             [MessageRole::User, 'Q1'],
             [MessageRole::Assistant, 'A1'],
             [MessageRole::User, 'Q2'],
@@ -125,6 +131,21 @@ final class SendMessageHandlerTest extends TestCase
             static fn ($m) => [$m->role, $m->content->text],
             $secondHistory,
         ));
+    }
+
+    public function testSystemPromptIsPrependedButNeverPersisted(): void
+    {
+        $this->llm->scriptReply('ok');
+
+        ($this->handler)(new SendMessageCommand($this->sessionId, 'hi'));
+
+        // The LLM sees the system prompt first…
+        self::assertSame(MessageRole::System, $this->llm->calls()[0]['conversation'][0]->role);
+
+        // …but it is never written to the stored conversation.
+        foreach ($this->messages->forSession($this->sessionId) as $message) {
+            self::assertNotSame('SYSTEM PROMPT', $message->content->text);
+        }
     }
 
     public function testSessionUpdatedAtIsBumped(): void

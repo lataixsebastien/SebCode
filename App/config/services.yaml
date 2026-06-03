@@ -47,6 +47,14 @@ services:
     App\Assistant\Domain\Port\LlmPort:
         alias: App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter
 
+    # Foundational system prompt (coding-agent role + tool guidance + workspace).
+    App\Assistant\Domain\Port\SystemPrompt:
+        alias: App\Assistant\Infrastructure\Prompt\SebCodeSystemPrompt
+
+    App\Assistant\Infrastructure\Prompt\SebCodeSystemPrompt:
+        arguments:
+            $projectRoot: '%kernel.project_dir%'
+
     # The Ollama-backed adapter takes the AI bundle Platform service for ollama.
     App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter:
         arguments:

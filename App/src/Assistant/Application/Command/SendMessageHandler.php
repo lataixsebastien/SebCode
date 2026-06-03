@@ -11,6 +11,7 @@ use App\Assistant\Domain\Exception\SessionNotFound;
 use App\Assistant\Domain\Model\Message;
 use App\Assistant\Domain\Model\Session;
 use App\Assistant\Domain\Model\ValueObject\MessageContent;
+use App\Assistant\Domain\Model\ValueObject\MessageId;
 use App\Assistant\Domain\Model\ValueObject\MessagePayload;
 use App\Assistant\Domain\Model\ValueObject\MessageRole;
 use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
@@ -20,6 +21,7 @@ use App\Assistant\Domain\Port\LlmPort;
 use App\Assistant\Domain\Port\LlmReply;
 use App\Assistant\Domain\Port\MessageRepository;
 use App\Assistant\Domain\Port\SessionRepository;
+use App\Assistant\Domain\Port\SystemPrompt;
 use App\Assistant\Domain\Port\ToolGateway;
 
 /**
@@ -44,6 +46,7 @@ final readonly class SendMessageHandler
         private ToolGateway $toolGateway,
         private IdGenerator $ids,
         private Clock $clock,
+        private SystemPrompt $systemPrompt,
     ) {
     }
 
@@ -66,7 +69,10 @@ final readonly class SendMessageHandler
 
         for ($turn = 1; $turn <= self::MAX_TURNS; ++$turn) {
             $history = $this->messages->forSession($command->sessionId);
-            $reply = $this->llm->complete($session->model, $history, $advertisements);
+            // Prepend the foundational system prompt at call time (never persisted),
+            // so it always leads the conversation without polluting the stored history.
+            $conversation = array_merge([$this->systemPromptMessage($session)], $history);
+            $reply = $this->llm->complete($session->model, $conversation, $advertisements);
 
             if ([] === $reply->toolCalls) {
                 $assistantMessage = $this->appendAssistantText($session, $reply->content);
@@ -105,6 +111,22 @@ final readonly class SendMessageHandler
         }
 
         throw new AgentLoopExceeded(self::MAX_TURNS);
+    }
+
+    /**
+     * Ephemeral System message carrying the foundational prompt. Built fresh
+     * each turn and NOT persisted — it uses a sentinel id and never touches the
+     * repository or the id generator.
+     */
+    private function systemPromptMessage(Session $session): Message
+    {
+        return new Message(
+            MessageId::fromString('msg_system_prompt'),
+            $session->id,
+            MessageRole::System,
+            MessageContent::of($this->systemPrompt->text()),
+            $this->clock->now(),
+        );
     }
 
     private function appendUserMessage(SendMessageCommand $command, Session $session): Message
