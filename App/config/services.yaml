@@ -78,6 +78,7 @@ services:
                 edit: '@App\Tool\Infrastructure\Tool\EditTool'
                 bash: '@App\Tool\Infrastructure\Tool\ShellTool'
                 todowrite: '@App\Tool\Infrastructure\Tool\TodoWriteTool'
+                apply_patch: '@App\Tool\Infrastructure\Tool\ApplyPatchTool'
 
     App\Tool\Domain\Port\ToolRegistry:
         alias: App\Tool\Infrastructure\Registry\ServiceLocatorToolRegistry
