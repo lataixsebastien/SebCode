@@ -32,6 +32,8 @@ interface ToolGateway
      * Soft failures (bad arguments, missing file, sandbox refusal) are returned
      * as `ToolResultDto::error(...)`. Hard failures (registry corrupted, etc.)
      * propagate as exceptions so the assistant loop can abort.
+     *
+     * `$sessionId` scopes session-stateful tools (e.g. todowrite) to the caller.
      */
-    public function execute(ToolCallRequest $request): ToolResultDto;
+    public function execute(ToolCallRequest $request, string $sessionId): ToolResultDto;
 }

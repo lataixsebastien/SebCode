@@ -52,7 +52,7 @@ final readonly class AssistantToolGatewayAdapter implements ToolGateway
         );
     }
 
-    public function execute(ToolCallRequest $request): ToolResultDto
+    public function execute(ToolCallRequest $request, string $sessionId): ToolResultDto
     {
         // LLM providers send tool_call ids in their own format (Ollama sends
         // plain integers like "0"; OpenAI uses "call_…"; Anthropic uses
@@ -77,7 +77,7 @@ final readonly class AssistantToolGatewayAdapter implements ToolGateway
         try {
             $result = ($this->executeTool)(new ExecuteToolCommand(
                 $call,
-                new ToolExecutionContext($this->projectRoot, $this->maxOutputBytes, $this->clock->now()),
+                new ToolExecutionContext($this->projectRoot, $this->maxOutputBytes, $this->clock->now(), $sessionId),
             ));
         } catch (ToolNotFound $e) {
             return ToolResultDto::error($request->id, $e->getMessage());

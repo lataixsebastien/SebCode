@@ -38,7 +38,7 @@ final class TodoWriteToolTest extends TestCase
         self::assertStringContainsString('[✓] read the file', $result->output);
         self::assertStringContainsString('[•] wire the CLI', $result->output);
         self::assertStringContainsString('[ ] add tests', $result->output);
-        self::assertCount(3, $this->store->all());
+        self::assertCount(3, $this->store->all('ses_test'));
 
         $todos = $result->metadata['todos'] ?? null;
         self::assertIsArray($todos);
@@ -56,7 +56,7 @@ final class TodoWriteToolTest extends TestCase
 
         self::assertFalse($result->isError);
         self::assertStringContainsString('0 todos', $result->output);
-        self::assertSame([], $this->store->all());
+        self::assertSame([], $this->store->all('ses_test'));
     }
 
     public function testInvalidStatusIsSoftFailure(): void
@@ -67,7 +67,7 @@ final class TodoWriteToolTest extends TestCase
 
         self::assertTrue($result->isError);
         self::assertStringContainsString('status', $result->output);
-        self::assertSame([], $this->store->all(), 'A rejected write must not mutate the store.');
+        self::assertSame([], $this->store->all('ses_test'), 'A rejected write must not mutate the store.');
     }
 
     public function testInvalidPriorityIsSoftFailure(): void
@@ -108,7 +108,7 @@ final class TodoWriteToolTest extends TestCase
     private function runTool(array $args): ToolResult
     {
         $call = new ToolCall(ToolCallId::fromString('tcl_t'), ToolName::of('todowrite'), $args);
-        $ctx = new ToolExecutionContext(sys_get_temp_dir(), 65536, new \DateTimeImmutable());
+        $ctx = new ToolExecutionContext(sys_get_temp_dir(), 65536, new \DateTimeImmutable(), 'ses_test');
 
         return (new TodoWriteTool($this->store))->execute($call, $ctx);
     }

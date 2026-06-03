@@ -14,12 +14,12 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(InMemoryTodoStore::class)]
 final class InMemoryTodoStoreTest extends TestCase
 {
-    public function testStartsEmpty(): void
+    public function testUnknownSessionIsEmpty(): void
     {
-        self::assertSame([], (new InMemoryTodoStore())->all());
+        self::assertSame([], (new InMemoryTodoStore())->all('ses_x'));
     }
 
-    public function testReplaceStoresTheList(): void
+    public function testReplaceStoresTheListForTheSession(): void
     {
         $store = new InMemoryTodoStore();
         $items = [
@@ -27,19 +27,29 @@ final class InMemoryTodoStoreTest extends TestCase
             new TodoItem('b', TodoStatus::InProgress, TodoPriority::High),
         ];
 
-        $store->replace($items);
+        $store->replace('ses_1', $items);
 
-        self::assertSame($items, $store->all());
+        self::assertSame($items, $store->all('ses_1'));
     }
 
     public function testSecondReplaceOverwritesTheFirst(): void
     {
         $store = new InMemoryTodoStore();
-        $store->replace([new TodoItem('old', TodoStatus::Pending, TodoPriority::Low)]);
+        $store->replace('ses_1', [new TodoItem('old', TodoStatus::Pending, TodoPriority::Low)]);
 
         $fresh = [new TodoItem('new', TodoStatus::Completed, TodoPriority::Medium)];
-        $store->replace($fresh);
+        $store->replace('ses_1', $fresh);
 
-        self::assertSame($fresh, $store->all());
+        self::assertSame($fresh, $store->all('ses_1'));
+    }
+
+    public function testSessionsAreIsolated(): void
+    {
+        $store = new InMemoryTodoStore();
+        $store->replace('ses_1', [new TodoItem('one', TodoStatus::Pending, TodoPriority::Low)]);
+        $store->replace('ses_2', [new TodoItem('two', TodoStatus::Pending, TodoPriority::Low)]);
+
+        self::assertCount(1, $store->all('ses_1'));
+        self::assertSame('two', $store->all('ses_2')[0]->content);
     }
 }

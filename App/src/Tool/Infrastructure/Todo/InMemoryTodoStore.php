@@ -8,26 +8,26 @@ use App\Tool\Domain\Model\TodoItem;
 use App\Tool\Domain\Port\TodoStore;
 
 /**
- * Process-lifetime todo list, kept in memory.
+ * Process-lifetime todo lists, kept in memory and keyed by session.
  *
  * Shared (singleton) so the list written by one `todowrite` call is visible to
- * the next within the same run. One process serves one session today, so the
- * store is not keyed by session — see the port docblock.
+ * the next within the same session/run. Used in unit tests and as the default
+ * binding; the Doctrine store persists across runs.
  */
 final class InMemoryTodoStore implements TodoStore
 {
     /**
-     * @var list<TodoItem>
+     * @var array<string, list<TodoItem>>
      */
     private array $todos = [];
 
-    public function replace(array $todos): void
+    public function replace(string $sessionId, array $todos): void
     {
-        $this->todos = $todos;
+        $this->todos[$sessionId] = $todos;
     }
 
-    public function all(): array
+    public function all(string $sessionId): array
     {
-        return $this->todos;
+        return $this->todos[$sessionId] ?? [];
     }
 }

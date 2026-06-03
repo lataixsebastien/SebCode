@@ -26,6 +26,9 @@ final class RecordingToolGateway implements ToolGateway
     /** @var list<ToolCallRequest> */
     public array $executions = [];
 
+    /** @var list<string> */
+    public array $sessionIds = [];
+
     /** @var list<ToolResultDto|\Throwable> */
     private array $scripted = [];
 
@@ -49,9 +52,10 @@ final class RecordingToolGateway implements ToolGateway
         return $this->advertised;
     }
 
-    public function execute(ToolCallRequest $request): ToolResultDto
+    public function execute(ToolCallRequest $request, string $sessionId): ToolResultDto
     {
         $this->executions[] = $request;
+        $this->sessionIds[] = $sessionId;
 
         if ([] === $this->scripted) {
             return ToolResultDto::success($request->id, \sprintf('default output for %s', $request->name));

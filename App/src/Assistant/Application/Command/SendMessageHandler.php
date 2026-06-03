@@ -97,7 +97,7 @@ final readonly class SendMessageHandler
                 array_unshift($recentToolSignatures, $signature);
                 $recentToolSignatures = \array_slice($recentToolSignatures, 0, self::DOOM_LOOP_THRESHOLD);
 
-                $result = $this->toolGateway->execute($call);
+                $result = $this->toolGateway->execute($call, $command->sessionId->value);
                 $intermediate[] = $this->appendToolResultMessage($session, $call, $result->output, $result->isError);
             }
 

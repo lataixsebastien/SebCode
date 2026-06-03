@@ -124,10 +124,10 @@ services:
     App\Tool\Domain\Port\PermissionGrants:
         alias: App\Tool\Infrastructure\Permission\InMemoryPermissionGrants
 
-    # Agent todo list (STEP-19): in-memory, process-lifetime — one process = one
-    # session today (see TodoStore docblock).
+    # Agent todo list: persisted per session in Postgres (STEP-23). The
+    # in-memory store stays for unit tests / as a fallback.
     App\Tool\Domain\Port\TodoStore:
-        alias: App\Tool\Infrastructure\Todo\InMemoryTodoStore
+        alias: App\Tool\Infrastructure\Persistence\Doctrine\Repository\DoctrineTodoStore
 
     App\Tool\Domain\Port\CommandRunner:
         alias: App\Tool\Infrastructure\Process\ProcOpenCommandRunner

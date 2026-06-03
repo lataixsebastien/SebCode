@@ -15,6 +15,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Assistant/Infrastructure/Persistence/Doctrine/Entity'
                 prefix: 'App\Assistant\Infrastructure\Persistence\Doctrine\Entity'
                 alias: Assistant
+            Tool:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Tool/Infrastructure/Persistence/Doctrine/Entity'
+                prefix: 'App\Tool\Infrastructure\Persistence\Doctrine\Entity'
+                alias: Tool
 
 when@test:
     doctrine:

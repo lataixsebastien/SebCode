@@ -106,7 +106,7 @@ final readonly class TodoWriteTool implements Tool
             $items[] = new TodoItem(trim($content), $status, $priority);
         }
 
-        $this->store->replace($items);
+        $this->store->replace($context->sessionId, $items);
 
         return ToolResult::success($call->id, $this->render($items), ['todos' => $this->toArray($items)]);
     }
