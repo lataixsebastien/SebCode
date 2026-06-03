@@ -12,17 +12,22 @@ use App\Assistant\Domain\Port\SystemPrompt;
  * Adapted (concise) from opencode's agent prompt for small local models:
  * states the role, embeds the workspace root + OS, and gives terse rules on
  * tool usage so glob/read/grep/write/edit/apply_patch/bash/todowrite are used
- * well. English on purpose — more reliable for the models than French.
+ * well. If the project ships an AGENTS.md, its content is appended so the agent
+ * follows the project's own conventions (faithful to opencode). English on
+ * purpose — more reliable for the models than French.
  */
 final readonly class SebCodeSystemPrompt implements SystemPrompt
 {
+    private const string INSTRUCTIONS_FILE = 'AGENTS.md';
+    private const int MAX_INSTRUCTIONS_BYTES = 8192;
+
     public function __construct(private string $projectRoot)
     {
     }
 
     public function text(): string
     {
-        return <<<PROMPT
+        $base = <<<PROMPT
             You are SebCode, an autonomous coding agent working inside a developer's project.
 
             Workspace root: {$this->projectRoot}
@@ -44,6 +49,31 @@ final readonly class SebCodeSystemPrompt implements SystemPrompt
             - Verify your work (e.g. run the relevant tests) before saying a task is done.
             - Be concise. When the task is complete, stop calling tools and give a short final answer.
             PROMPT;
+
+        $instructions = $this->projectInstructions();
+        if ('' === $instructions) {
+            return $base;
+        }
+
+        return $base."\n\n## Project-specific instructions (from AGENTS.md)\n\n".$instructions;
+    }
+
+    /**
+     * The project's AGENTS.md content (trimmed, size-capped), or '' if absent.
+     */
+    private function projectInstructions(): string
+    {
+        $path = $this->projectRoot.\DIRECTORY_SEPARATOR.self::INSTRUCTIONS_FILE;
+        if (!is_file($path)) {
+            return '';
+        }
+
+        $content = trim((string) file_get_contents($path));
+        if (\strlen($content) > self::MAX_INSTRUCTIONS_BYTES) {
+            $content = substr($content, 0, self::MAX_INSTRUCTIONS_BYTES)."\n…(truncated)";
+        }
+
+        return $content;
     }
 
     private function os(): string
