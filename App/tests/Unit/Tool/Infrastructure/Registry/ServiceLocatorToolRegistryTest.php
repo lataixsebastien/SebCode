@@ -46,13 +46,16 @@ final class ServiceLocatorToolRegistryTest extends TestCase
 
     public function testThrowsOnDuplicateName(): void
     {
-        $this->expectException(\LogicException::class);
-        $this->expectExceptionMessageMatches('/Duplicate tool name "fake"/');
-
-        new ServiceLocatorToolRegistry(
+        $registry = new ServiceLocatorToolRegistry(
             [new FakeTool('fake'), new FakeTool('fake')],
             $this->emptyLocator(),
         );
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessageMatches('/Duplicate tool name "fake"/');
+
+        // Indexing is lazy: the clash surfaces on first list().
+        $registry->list();
     }
 
     private function emptyLocator(): ContainerInterface
