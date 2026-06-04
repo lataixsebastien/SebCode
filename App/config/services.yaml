@@ -55,6 +55,11 @@ services:
         arguments:
             $projectRoot: '%kernel.project_dir%'
 
+    # Live output stream (STEP-27): the agent loop reports text deltas + tool
+    # calls/results to the attached UI sink.
+    App\Assistant\Domain\Port\AgentOutputStreamRegistry:
+        alias: App\Assistant\Infrastructure\Stream\MutableAgentOutputStreamRegistry
+
     # The Ollama-backed adapter takes the AI bundle Platform service for ollama.
     App\Assistant\Infrastructure\Llm\SymfonyAiOllamaAdapter:
         arguments:

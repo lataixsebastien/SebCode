@@ -18,4 +18,17 @@ interface LlmPort
      * @throws LlmUnavailable
      */
     public function complete(ModelName $model, array $conversation, array $tools = []): LlmReply;
+
+    /**
+     * Like {@see complete()} but streams the assistant's text: `$onText` is
+     * called with each chunk as it arrives. The returned reply still carries
+     * the full content, tool calls and token usage.
+     *
+     * @param list<Message> $conversation
+     * @param list<ToolAdvertisement> $tools
+     * @param callable(string): void $onText
+     *
+     * @throws LlmUnavailable
+     */
+    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText): LlmReply;
 }

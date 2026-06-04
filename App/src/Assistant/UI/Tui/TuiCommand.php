@@ -15,6 +15,7 @@ use App\Assistant\Domain\Model\Message;
 use App\Assistant\Domain\Model\ValueObject\MessageRole;
 use App\Assistant\Domain\Model\ValueObject\ModelName;
 use App\Assistant\Domain\Model\ValueObject\SessionId;
+use App\Assistant\Domain\Port\AgentOutputStreamRegistry;
 use App\Assistant\Domain\Port\SessionRepository;
 use App\Tool\Domain\Port\PermissionConsoleRegistry;
 use Revolt\EventLoop;
@@ -41,7 +42,6 @@ final class TuiCommand extends Command
 {
     private const string MARKER_USER = '▶ You';
     private const string MARKER_ASSISTANT = '◀ Assistant';
-    private const string MARKER_THINKING = '◀ Assistant — (thinking…)';
     private const string MARKER_ERROR = '⚠ Error';
 
     public function __construct(
@@ -50,6 +50,7 @@ final class TuiCommand extends Command
         private readonly SendMessageHandler $sendMessage,
         private readonly GetSessionMessagesHandler $getMessages,
         private readonly PermissionConsoleRegistry $consoles,
+        private readonly AgentOutputStreamRegistry $streams,
         private readonly string $defaultModel,
     ) {
         parent::__construct();
@@ -98,11 +99,15 @@ final class TuiCommand extends Command
         $console->activate();
         $this->consoles->attach($console);
 
+        // Stream the assistant's text + tool calls/results live into the transcript.
+        $this->streams->attach(new TuiAgentOutputStream($tui, $transcript));
+
         try {
             $tui->run();
         } finally {
             $this->consoles->detach();
             $console->deactivate();
+            $this->streams->detach();
         }
 
         return Command::SUCCESS;
@@ -174,35 +179,18 @@ final class TuiCommand extends Command
             $inputWidget->setValue('');
 
             $this->appendLine($transcript, self::MARKER_USER, $text, 'user');
-            $thinking = $this->appendLine($transcript, self::MARKER_THINKING, '', 'thinking');
             $tui->requestRender();
 
-            EventLoop::queue(function () use ($transcript, $thinking, $sessionId, $text, $tui): void {
+            // The agent loop streams its progress (text + tool calls/results)
+            // live into the transcript via the attached AgentOutputStream; we
+            // only render errors here.
+            EventLoop::queue(function () use ($transcript, $sessionId, $text, $tui): void {
                 try {
-                    $result = ($this->sendMessage)(new SendMessageCommand($sessionId, $text));
-                    $transcript->remove($thinking);
-                    $this->appendLine(
-                        $transcript,
-                        self::MARKER_ASSISTANT,
-                        $result->assistantMessage->content->text,
-                        'assistant',
-                    );
+                    ($this->sendMessage)(new SendMessageCommand($sessionId, $text));
                 } catch (LlmUnavailable $e) {
-                    $transcript->remove($thinking);
-                    $this->appendLine(
-                        $transcript,
-                        self::MARKER_ERROR,
-                        \sprintf('LLM unavailable: %s', $e->getMessage()),
-                        'error',
-                    );
+                    $this->appendLine($transcript, self::MARKER_ERROR, \sprintf('LLM unavailable: %s', $e->getMessage()), 'error');
                 } catch (\Throwable $e) {
-                    $transcript->remove($thinking);
-                    $this->appendLine(
-                        $transcript,
-                        self::MARKER_ERROR,
-                        $e->getMessage(),
-                        'error',
-                    );
+                    $this->appendLine($transcript, self::MARKER_ERROR, $e->getMessage(), 'error');
                 }
                 $tui->requestRender();
             });

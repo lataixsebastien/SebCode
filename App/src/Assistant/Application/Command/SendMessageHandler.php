@@ -15,6 +15,7 @@ use App\Assistant\Domain\Model\ValueObject\MessageId;
 use App\Assistant\Domain\Model\ValueObject\MessagePayload;
 use App\Assistant\Domain\Model\ValueObject\MessageRole;
 use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
+use App\Assistant\Domain\Port\AgentOutputStreamRegistry;
 use App\Assistant\Domain\Port\Clock;
 use App\Assistant\Domain\Port\IdGenerator;
 use App\Assistant\Domain\Port\LlmPort;
@@ -47,6 +48,7 @@ final readonly class SendMessageHandler
         private IdGenerator $ids,
         private Clock $clock,
         private SystemPrompt $systemPrompt,
+        private AgentOutputStreamRegistry $streams,
     ) {
     }
 
@@ -66,13 +68,22 @@ final readonly class SendMessageHandler
         $advertisements = $this->toolGateway->availableTools();
         $intermediate = [];
         $recentToolSignatures = [];
+        $stream = $this->streams->current();
 
         for ($turn = 1; $turn <= self::MAX_TURNS; ++$turn) {
             $history = $this->messages->forSession($command->sessionId);
             // Prepend the foundational system prompt at call time (never persisted),
             // so it always leads the conversation without polluting the stored history.
             $conversation = array_merge([$this->systemPromptMessage($session)], $history);
-            $reply = $this->llm->complete($session->model, $conversation, $advertisements);
+            // Stream the assistant's text live to any attached UI as it arrives.
+            $reply = $this->llm->completeStreaming(
+                $session->model,
+                $conversation,
+                $advertisements,
+                static function (string $delta) use ($stream): void {
+                    $stream->assistantText($delta);
+                },
+            );
 
             if ([] === $reply->toolCalls) {
                 $assistantMessage = $this->appendAssistantText($session, $reply->content);
@@ -97,7 +108,9 @@ final readonly class SendMessageHandler
                 array_unshift($recentToolSignatures, $signature);
                 $recentToolSignatures = \array_slice($recentToolSignatures, 0, self::DOOM_LOOP_THRESHOLD);
 
+                $stream->toolCall($call->name, $call->arguments);
                 $result = $this->toolGateway->execute($call, $command->sessionId->value);
+                $stream->toolResult($call->name, $result->output, $result->isError);
                 $intermediate[] = $this->appendToolResultMessage($session, $call, $result->output, $result->isError);
             }
 

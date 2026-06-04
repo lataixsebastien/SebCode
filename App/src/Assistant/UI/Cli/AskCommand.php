@@ -11,11 +11,9 @@ use App\Assistant\Application\Command\StartSessionHandler;
 use App\Assistant\Domain\Exception\AgentLoopExceeded;
 use App\Assistant\Domain\Exception\LlmUnavailable;
 use App\Assistant\Domain\Exception\SessionNotFound;
-use App\Assistant\Domain\Model\Message;
-use App\Assistant\Domain\Model\ValueObject\MessagePayloadKind;
 use App\Assistant\Domain\Model\ValueObject\ModelName;
 use App\Assistant\Domain\Model\ValueObject\SessionId;
-use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
+use App\Assistant\Domain\Port\AgentOutputStreamRegistry;
 use App\Tool\Domain\Port\PermissionConsoleRegistry;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -35,6 +33,7 @@ final class AskCommand extends Command
         private readonly StartSessionHandler $startSession,
         private readonly SendMessageHandler $sendMessage,
         private readonly PermissionConsoleRegistry $consoles,
+        private readonly AgentOutputStreamRegistry $streams,
         private readonly string $defaultModel,
     ) {
         parent::__construct();
@@ -86,11 +85,13 @@ final class AskCommand extends Command
 
         $io->section('You');
         $io->writeln($question);
+        $io->section('Assistant');
 
-        // Let mutating tools (write/edit/bash) prompt this terminal for
-        // permission, deep in the synchronous agent loop. Detached in finally
-        // so the shared registry never leaks a stale console to the next run.
+        // Let mutating tools prompt this terminal for permission, and stream the
+        // assistant's progress (text + tool calls/results) live. Both detached
+        // in finally so the shared registries never leak to the next run.
         $this->consoles->attach(new ConsolePermissionConsole($io, $input->isInteractive()));
+        $this->streams->attach(new CliAgentOutputStream($output));
 
         try {
             $result = ($this->sendMessage)(new SendMessageCommand($sessionId, $question));
@@ -110,16 +111,10 @@ final class AskCommand extends Command
             return Command::FAILURE;
         } finally {
             $this->consoles->detach();
+            $this->streams->detach();
         }
 
-        foreach ($result->intermediateMessages as $intermediate) {
-            $this->renderIntermediate($io, $intermediate);
-        }
-
-        $io->section('Assistant');
-        $io->writeln($result->assistantMessage->content->text);
-
-        $io->newLine();
+        $io->newLine(2);
         $io->writeln(\sprintf(
             '<comment>session=%s</comment>  <comment>prompt_tokens=%s</comment>  <comment>completion_tokens=%s</comment>',
             $sessionId->value,
@@ -128,55 +123,6 @@ final class AskCommand extends Command
         ));
 
         return Command::SUCCESS;
-    }
-
-    private function renderIntermediate(SymfonyStyle $io, Message $message): void
-    {
-        $payload = $message->payload;
-        if (null === $payload) {
-            // System nudge or other plain intermediate — just print one line.
-            $io->writeln(\sprintf('<comment>[%s]</comment> %s', $message->role->value, $message->content->text));
-
-            return;
-        }
-
-        if (MessagePayloadKind::ToolCall === $payload->kind) {
-            foreach ($payload->toolCalls as $call) {
-                $io->writeln(\sprintf(
-                    '<info>🔧 %s(%s)</info>',
-                    $call->name,
-                    $this->renderArguments($call),
-                ));
-            }
-
-            return;
-        }
-
-        // Tool result — green check / red cross + truncated output.
-        $marker = $payload->isError ? '<error>⚠</error>' : '<info>✓</info>';
-        $output = $payload->toolOutput ?? '';
-        $io->writeln(\sprintf(
-            '   %s %s → %s',
-            $marker,
-            $payload->toolName ?? '?',
-            $this->oneLine($output),
-        ));
-    }
-
-    private function renderArguments(ToolCallRequest $call): string
-    {
-        if ([] === $call->arguments) {
-            return '';
-        }
-
-        return (string) json_encode($call->arguments, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
-    }
-
-    private function oneLine(string $output): string
-    {
-        $oneLine = trim(preg_replace('/\s+/', ' ', $output) ?? '');
-
-        return mb_strlen($oneLine) > 140 ? mb_substr($oneLine, 0, 137).'...' : $oneLine;
     }
 
     private function resolveSessionId(InputInterface $input, SymfonyStyle $io): SessionId

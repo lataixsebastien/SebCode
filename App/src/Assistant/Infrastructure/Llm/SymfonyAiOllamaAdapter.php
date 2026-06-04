@@ -19,9 +19,12 @@ use Symfony\AI\Platform\Message\SystemMessage;
 use Symfony\AI\Platform\Message\ToolCallMessage;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
 /**
@@ -39,23 +42,7 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
     public function complete(ModelName $model, array $conversation, array $tools = []): LlmReply
     {
         $bag = $this->toMessageBag($conversation);
-        $options = [];
-        if ([] !== $tools) {
-            // Pass the tools list straight through to Ollama in the standard
-            // OpenAI-style function-calling shape; the OllamaClient lifts the
-            // "tools" option to a top-level JSON field on /api/chat.
-            $options['tools'] = array_map(
-                static fn (ToolAdvertisement $t): array => [
-                    'type' => 'function',
-                    'function' => [
-                        'name' => $t->name,
-                        'description' => $t->description,
-                        'parameters' => $t->parameters,
-                    ],
-                ],
-                $tools,
-            );
-        }
+        $options = $this->toolOptions($tools);
 
         try {
             $deferred = $this->platform->invoke($model->value, $bag, $options);
@@ -91,6 +78,67 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
             promptTokens: $tokenUsage?->getPromptTokens(),
             completionTokens: $tokenUsage?->getCompletionTokens(),
         );
+    }
+
+    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText): LlmReply
+    {
+        $bag = $this->toMessageBag($conversation);
+        $options = $this->toolOptions($tools);
+        $options['stream'] = true;
+
+        $content = '';
+        $toolCalls = [];
+        $promptTokens = null;
+        $completionTokens = null;
+
+        try {
+            $deferred = $this->platform->invoke($model->value, $bag, $options);
+            foreach ($deferred->asStream() as $delta) {
+                if ($delta instanceof TextDelta) {
+                    $content .= $delta->getText();
+                    $onText($delta->getText());
+                } elseif ($delta instanceof ToolCallComplete) {
+                    foreach ($delta->getToolCalls() as $tc) {
+                        $toolCalls[] = new ToolCallRequest($tc->getId(), $tc->getName(), $tc->getArguments());
+                    }
+                } elseif ($delta instanceof TokenUsage) {
+                    $promptTokens = $delta->getPromptTokens();
+                    $completionTokens = $delta->getCompletionTokens();
+                }
+            }
+        } catch (\Throwable $e) {
+            throw LlmUnavailable::fromUpstream($e->getMessage(), $e);
+        }
+
+        return new LlmReply($content, $promptTokens, $completionTokens, $toolCalls);
+    }
+
+    /**
+     * @param list<ToolAdvertisement> $tools
+     *
+     * @return array<string, mixed>
+     */
+    private function toolOptions(array $tools): array
+    {
+        if ([] === $tools) {
+            return [];
+        }
+
+        // OpenAI-style function-calling shape; the OllamaClient lifts "tools"
+        // to a top-level JSON field on /api/chat.
+        return [
+            'tools' => array_map(
+                static fn (ToolAdvertisement $t): array => [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => $t->name,
+                        'description' => $t->description,
+                        'parameters' => $t->parameters,
+                    ],
+                ],
+                $tools,
+            ),
+        ];
     }
 
     private function tokenUsageFrom(TextResult|ToolCallResult $result): ?TokenUsageInterface

@@ -19,6 +19,9 @@ use App\Assistant\Domain\Model\ValueObject\SessionId;
 use App\Assistant\Domain\Model\ValueObject\ToolAdvertisement;
 use App\Assistant\Domain\Model\ValueObject\ToolCallRequest;
 use App\Assistant\Domain\Model\ValueObject\ToolResultDto;
+use App\Assistant\Infrastructure\Stream\MutableAgentOutputStreamRegistry;
+use App\Assistant\Infrastructure\Stream\NullAgentOutputStream;
+use App\Tests\Support\Assistant\Doubles\FakeAgentOutputStream;
 use App\Tests\Support\Assistant\Doubles\FixedClock;
 use App\Tests\Support\Assistant\Doubles\FixedSystemPrompt;
 use App\Tests\Support\Assistant\Doubles\InMemoryMessageRepository;
@@ -40,6 +43,7 @@ final class SendMessageHandlerTest extends TestCase
     private RecordingToolGateway $toolGateway;
     private SequenceIdGenerator $ids;
     private FixedClock $clock;
+    private MutableAgentOutputStreamRegistry $streams;
     private SendMessageHandler $handler;
     private SessionId $sessionId;
 
@@ -51,6 +55,7 @@ final class SendMessageHandlerTest extends TestCase
         $this->toolGateway = new RecordingToolGateway();
         $this->ids = new SequenceIdGenerator();
         $this->clock = new FixedClock('2026-05-30T12:00:00+00:00');
+        $this->streams = new MutableAgentOutputStreamRegistry(new NullAgentOutputStream());
         $this->handler = new SendMessageHandler(
             $this->sessions,
             $this->messages,
@@ -59,6 +64,7 @@ final class SendMessageHandlerTest extends TestCase
             $this->ids,
             $this->clock,
             new FixedSystemPrompt('SYSTEM PROMPT'),
+            $this->streams,
         );
 
         $this->sessionId = SessionId::fromString('ses_existing');
@@ -146,6 +152,21 @@ final class SendMessageHandlerTest extends TestCase
         foreach ($this->messages->forSession($this->sessionId) as $message) {
             self::assertNotSame('SYSTEM PROMPT', $message->content->text);
         }
+    }
+
+    public function testStreamsTextAndToolEventsToTheAttachedSink(): void
+    {
+        $sink = new FakeAgentOutputStream();
+        $this->streams->attach($sink);
+
+        $this->llm->scriptToolCallTurn([new ToolCallRequest('0', 'read', ['filePath' => 'x'])]);
+        $this->llm->scriptReply('final answer');
+
+        ($this->handler)(new SendMessageCommand($this->sessionId, 'go'));
+
+        self::assertSame(['read'], $sink->toolCalls);
+        self::assertCount(1, $sink->toolResults);
+        self::assertContains('final answer', $sink->texts, 'The final assistant text is streamed live.');
     }
 
     public function testSessionUpdatedAtIsBumped(): void

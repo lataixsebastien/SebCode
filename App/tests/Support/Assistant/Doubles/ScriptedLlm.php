@@ -46,6 +46,25 @@ final class ScriptedLlm implements LlmPort
 
     public function complete(ModelName $model, array $conversation, array $tools = []): LlmReply
     {
+        return $this->next($model, $conversation, $tools);
+    }
+
+    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText): LlmReply
+    {
+        $reply = $this->next($model, $conversation, $tools);
+        if ('' !== $reply->content) {
+            $onText($reply->content);
+        }
+
+        return $reply;
+    }
+
+    /**
+     * @param list<Message> $conversation
+     * @param list<ToolAdvertisement> $tools
+     */
+    private function next(ModelName $model, array $conversation, array $tools): LlmReply
+    {
         $this->calls[] = ['model' => $model, 'conversation' => $conversation, 'tools' => $tools];
 
         if (null !== $this->throwInstead) {
