@@ -41,4 +41,26 @@ final class TuiPermissionConsoleTest extends TestCase
         yield 'empty → null' => ['', null];
         yield 'first recognised wins in a chunk' => ['zzo', PermissionChoice::AllowOnce];
     }
+
+    #[DataProvider('navigation')]
+    public function testMapNavigation(string $bytes, ?string $expected): void
+    {
+        self::assertSame($expected, TuiPermissionConsole::mapNavigation($bytes));
+    }
+
+    /**
+     * @return iterable<string, array{string, ?string}>
+     */
+    public static function navigation(): iterable
+    {
+        yield 'left arrow (CSI)' => ["\x1b[D", 'left'];
+        yield 'left arrow (SS3)' => ["\x1bOD", 'left'];
+        yield 'right arrow (CSI)' => ["\x1b[C", 'right'];
+        yield 'right arrow (SS3)' => ["\x1bOC", 'right'];
+        yield 'tab cycles right' => ["\t", 'right'];
+        yield 'carriage return → enter' => ["\r", 'enter'];
+        yield 'newline → enter' => ["\n", 'enter'];
+        yield 'bare escape is not navigation' => ["\x1b", null];
+        yield 'letter is not navigation' => ['o', null];
+    }
 }

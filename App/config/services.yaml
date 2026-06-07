@@ -65,6 +65,14 @@ services:
         arguments:
             $platform: '@ai.platform.ollama'
 
+    # Model picker source (STEP-29): lists local Ollama models via /api/tags.
+    App\Assistant\Infrastructure\Llm\OllamaModelCatalog:
+        arguments:
+            $endpoint: '%env(OLLAMA_ENDPOINT)%'
+
+    App\Assistant\Domain\Port\ModelCatalog:
+        alias: App\Assistant\Infrastructure\Llm\OllamaModelCatalog
+
     # Default LLM model picked by CLI/TUI commands (overridable per-invocation).
     App\Assistant\UI\Cli\AskCommand:
         arguments:
