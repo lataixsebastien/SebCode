@@ -20,8 +20,10 @@ use App\Assistant\Domain\Port\SessionRepository;
 use App\Assistant\UI\Tui\Component\PromptHistory;
 use App\Assistant\UI\Tui\Component\SlashCommands;
 use App\Assistant\UI\Tui\Component\StatusBarWidget;
+use App\Assistant\UI\Tui\Component\StepsPanelWidget;
 use App\Assistant\UI\Tui\Component\TranscriptView;
 use App\Tool\Domain\Port\PermissionConsoleRegistry;
+use App\Tool\Domain\Port\TodoStore;
 use Revolt\EventLoop;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -49,8 +51,11 @@ use Symfony\Component\Tui\Widget\TextWidget;
  * - immutable scrollback transcript (markdown assistant replies, per-tool
  *   formatted calls/results, accent-barred user prompts, splash banner);
  * - footer with a rounded-border composer, a slash-command palette, model
- *   and session pickers, and a two-row status bar (agent · model · session,
- *   spinner/elapsed/hints, token usage);
+ *   and session pickers, a sticky right-aligned Steps panel (the agent's
+ *   live todo list), and a two-row status bar;
+ * - home screen at boot (continue last session / new chat / pick a
+ *   session / pick a model), `--continue` to resume the latest session,
+ *   lazy session creation when typing straight away;
  * - prompt history (↑/↓), Esc to clear/close/interrupt, double Ctrl+C to
  *   quit, PgUp/PgDn to scroll the transcript.
  */
@@ -69,6 +74,7 @@ final class TuiCommand extends Command
     private ?Tui $tui = null;
     private TranscriptView $view;
     private StatusBarWidget $statusBar;
+    private StepsPanelWidget $stepsPanel;
     private ContainerWidget $palettePanel;
     private TextWidget $paletteTitle;
     private SelectListWidget $paletteList;
@@ -77,8 +83,10 @@ final class TuiCommand extends Command
     private PromptHistory $history;
     private Keybindings $keys;
 
-    private SessionId $sessionId;
-    private ModelName $model;
+    /** Null until a session is started or resumed (home screen, STEP-30). */
+    private ?SessionId $sessionId = null;
+    private ?ModelName $model = null;
+    private ModelName $launchModel;
     private bool $exitArmed = false;
     private int $scrollOffset = 0;
 
@@ -88,6 +96,7 @@ final class TuiCommand extends Command
         private readonly SendMessageHandler $sendMessage,
         private readonly GetSessionMessagesHandler $getMessages,
         private readonly ModelCatalog $models,
+        private readonly TodoStore $todos,
         private readonly PermissionConsoleRegistry $consoles,
         private readonly AgentOutputStreamRegistry $streams,
         private readonly string $defaultModel,
@@ -99,7 +108,8 @@ final class TuiCommand extends Command
     {
         $this
             ->addOption('session', 's', InputOption::VALUE_REQUIRED, 'Resume an existing session id (ses_…).')
-            ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Model for a new session.', $this->defaultModel)
+            ->addOption('continue', 'c', InputOption::VALUE_NONE, 'Resume the most recently updated session.')
+            ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Model for new sessions.', $this->defaultModel)
             ->addOption('title', 't', InputOption::VALUE_REQUIRED, 'Title for a new session.', 'TUI chat');
     }
 
@@ -107,23 +117,9 @@ final class TuiCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        try {
-            $sessionId = $this->resolveSession($input);
-        } catch (\InvalidArgumentException $e) {
-            $io->error($e->getMessage());
-
-            return Command::INVALID;
-        }
-
-        $session = $this->sessions->findById($sessionId);
-        if (null === $session) {
-            $io->error(\sprintf('Session "%s" not found.', $sessionId->value));
-
-            return Command::FAILURE;
-        }
-
-        $this->sessionId = $session->id;
-        $this->model = $session->model;
+        $model = $input->getOption('model');
+        \assert(\is_string($model));
+        $this->launchModel = ModelName::of($model);
         $this->history = new PromptHistory();
         $this->keys = new Keybindings([
             'quit' => ['ctrl+c'],
@@ -135,8 +131,27 @@ final class TuiCommand extends Command
             'page_down' => [Key::PAGE_DOWN],
         ]);
 
+        try {
+            $session = $this->resolveStartupSession($input);
+        } catch (\InvalidArgumentException $e) {
+            $io->error($e->getMessage());
+
+            return Command::INVALID;
+        }
+
+        if (null === $session && $this->wantsExistingSession($input)) {
+            $io->error('No matching session found.');
+
+            return Command::FAILURE;
+        }
+
         $tui = $this->buildTui();
-        $this->showSession($session, hydrate: true);
+
+        if (null !== $session) {
+            $this->showSession($session, hydrate: true);
+        } else {
+            $this->showHome();
+        }
 
         // Let mutating tools (write/edit/bash) prompt this terminal for
         // permission from deep in the (blocked) agent loop. Detached in finally
@@ -147,8 +162,11 @@ final class TuiCommand extends Command
         $console->activate();
         $this->consoles->attach($console);
 
-        // Stream the assistant's text + tool calls/results live into the transcript.
+        // Stream the assistant's text + tool calls/results live into the
+        // transcript; refresh the Steps panel whenever the agent rewrites
+        // its todo list mid-turn.
         $this->stream = new TuiAgentOutputStream($tui, $this->view, $this->statusBar);
+        $this->stream->onTodosChanged(fn () => $this->refreshTodos());
         $this->streams->attach($this->stream);
 
         try {
@@ -162,18 +180,35 @@ final class TuiCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function resolveSession(InputInterface $input): SessionId
+    // ── Startup session resolution ──────────────────────────────────────
+
+    private function wantsExistingSession(InputInterface $input): bool
+    {
+        $existing = $input->getOption('session');
+
+        return (\is_string($existing) && '' !== $existing) || true === $input->getOption('continue');
+    }
+
+    private function resolveStartupSession(InputInterface $input): ?Session
     {
         $existing = $input->getOption('session');
         if (\is_string($existing) && '' !== $existing) {
-            return SessionId::fromString($existing);
+            return $this->sessions->findById(SessionId::fromString($existing));
         }
 
-        $model = $input->getOption('model');
-        $title = $input->getOption('title');
-        \assert(\is_string($model) && \is_string($title));
+        if (true === $input->getOption('continue')) {
+            return $this->latestSession();
+        }
 
-        return ($this->startSession)(new StartSessionCommand(ModelName::of($model), $title));
+        return null;
+    }
+
+    private function latestSession(): ?Session
+    {
+        $sessions = $this->sessions->all();
+        usort($sessions, static fn (Session $a, Session $b): int => $b->updatedAt() <=> $a->updatedAt());
+
+        return $sessions[0] ?? null;
     }
 
     // ── Layout ──────────────────────────────────────────────────────────
@@ -189,8 +224,10 @@ final class TuiCommand extends Command
             ->addStyleClass('transcript');
         $this->view = new TranscriptView($transcript);
 
-        // Footer: palette (hidden by default) + permission dialog slot +
-        // bordered composer + two-row status bar.
+        // Footer: Steps panel (agent todos, sticky) + palette (hidden by
+        // default) + permission dialog slot + bordered composer + status bar.
+        $this->stepsPanel = new StepsPanelWidget();
+
         $this->paletteTitle = (new TextWidget('Commands'))->addStyleClass('palette-title');
         $this->paletteList = new SelectListWidget(SlashCommands::items(), maxVisible: 6);
         $this->palettePanel = (new ContainerWidget())->addStyleClass('palette');
@@ -209,6 +246,7 @@ final class TuiCommand extends Command
         $this->statusBar = new StatusBarWidget();
 
         $footer = new ContainerWidget();
+        $footer->add($this->stepsPanel);
         $footer->add($this->palettePanel);
         $footer->add($dialogSlot);
         $footer->add($composer);
@@ -379,7 +417,9 @@ final class TuiCommand extends Command
             $mode = $this->mode;
             $this->closePalette();
 
-            if ('models' === $mode) {
+            if ('home' === $mode) {
+                $this->executeHomeChoice($value);
+            } elseif ('models' === $mode) {
                 $this->startNewSession(ModelName::of($value));
             } elseif ('sessions' === $mode) {
                 $this->switchToSession($value);
@@ -426,6 +466,97 @@ final class TuiCommand extends Command
         $this->tui?->requestRender();
     }
 
+    // ── Home screen (STEP-30) ───────────────────────────────────────────
+
+    private function showHome(): void
+    {
+        $this->sessionId = null;
+        $this->model = null;
+        $this->statusBar->setIdentity(self::AGENT_NAME, $this->launchModel->value, 'no session');
+        $this->view->clear();
+        $this->view->home($this->launchModel->value);
+        $this->refreshTodos();
+        $this->resetScroll();
+        $this->openPicker('home', 'Welcome', $this->homeItems());
+    }
+
+    /**
+     * @return list<array{value: string, label: string, description: string}>
+     */
+    private function homeItems(): array
+    {
+        $items = [];
+
+        $latest = $this->latestSession();
+        if (null !== $latest) {
+            $items[] = [
+                'value' => 'home:continue',
+                'label' => 'Continue last session',
+                'description' => \sprintf(
+                    '%s · %s · %s',
+                    $latest->title(),
+                    $latest->model->value,
+                    $latest->updatedAt()->format('Y-m-d H:i'),
+                ),
+            ];
+        }
+
+        $items[] = ['value' => 'home:new', 'label' => 'New chat', 'description' => 'start fresh with '.$this->launchModel->value];
+        $items[] = ['value' => 'home:sessions', 'label' => 'Pick a session…', 'description' => 'resume any saved session'];
+        $items[] = ['value' => 'home:models', 'label' => 'Pick a model…', 'description' => 'new chat with another model'];
+        $items[] = ['value' => 'home:exit', 'label' => 'Quit', 'description' => 'leave the TUI'];
+
+        return $items;
+    }
+
+    private function executeHomeChoice(string $value): void
+    {
+        match ($value) {
+            'home:continue' => $this->continueLatestSession(),
+            'home:new' => $this->startNewSession($this->launchModel),
+            'home:sessions' => $this->openSessionPicker(),
+            'home:models' => $this->openModelPicker(),
+            'home:exit' => $this->tui?->stop(),
+            default => null,
+        };
+    }
+
+    private function continueLatestSession(): void
+    {
+        $latest = $this->latestSession();
+        if (null === $latest) {
+            $this->view->error('No session to continue.');
+            $this->tui?->requestRender();
+
+            return;
+        }
+
+        $this->showSession($latest, hydrate: true);
+        $this->tui?->requestRender(true);
+    }
+
+    /**
+     * Lazily create a session when the user types a prompt straight from
+     * the home screen.
+     */
+    private function ensureSession(): SessionId
+    {
+        if (null !== $this->sessionId) {
+            return $this->sessionId;
+        }
+
+        $sessionId = ($this->startSession)(new StartSessionCommand($this->launchModel, 'TUI chat'));
+        $session = $this->sessions->findById($sessionId);
+        \assert($session instanceof Session);
+
+        $this->sessionId = $session->id;
+        $this->model = $session->model;
+        $this->statusBar->setIdentity(self::AGENT_NAME, $session->model->value, $session->id->value);
+        $this->view->system(\sprintf('new session %s (%s)', $session->id->value, $session->model->value));
+
+        return $session->id;
+    }
+
     // ── Slash commands ──────────────────────────────────────────────────
 
     private function executeCommand(string $command): void
@@ -434,7 +565,7 @@ final class TuiCommand extends Command
             SlashCommands::EXIT => $this->tui?->stop(),
             SlashCommands::CLEAR => $this->clearTranscript(),
             SlashCommands::HELP => $this->showHelp(),
-            SlashCommands::NEW => $this->startNewSession($this->model),
+            SlashCommands::NEW => $this->startNewSession($this->model ?? $this->launchModel),
             SlashCommands::MODELS => $this->openModelPicker(),
             SlashCommands::SESSIONS => $this->openSessionPicker(),
             default => null,
@@ -469,7 +600,7 @@ final class TuiCommand extends Command
             fn (ModelName $model): array => [
                 'value' => $model->value,
                 'label' => $model->value,
-                'description' => $model->value === $this->model->value ? 'current' : '',
+                'description' => $model->value === $this->model?->value ? 'current' : '',
             ],
             $models,
         );
@@ -481,15 +612,22 @@ final class TuiCommand extends Command
         $sessions = $this->sessions->all();
         usort($sessions, static fn (Session $a, Session $b): int => $b->updatedAt() <=> $a->updatedAt());
 
+        if ([] === $sessions) {
+            $this->view->error('No saved session yet.');
+            $this->tui?->requestRender();
+
+            return;
+        }
+
         $items = array_map(
             fn (Session $session): array => [
                 'value' => $session->id->value,
                 'label' => $session->title(),
                 'description' => \sprintf(
                     '%s · %s%s',
-                    $session->id->value,
                     $session->model->value,
-                    $session->id->value === $this->sessionId->value ? ' · current' : '',
+                    $session->updatedAt()->format('Y-m-d H:i'),
+                    $session->id->value === $this->sessionId?->value ? ' · current' : '',
                 ),
             ],
             $sessions,
@@ -536,6 +674,7 @@ final class TuiCommand extends Command
 
         $this->view->clear();
         $this->view->splash($session->model->value, $session->id->value, $session->title());
+        $this->refreshTodos();
         $this->resetScroll();
 
         if ($hydrate) {
@@ -545,10 +684,20 @@ final class TuiCommand extends Command
         }
     }
 
+    /** Reload the Steps panel from the per-session todo store. */
+    private function refreshTodos(): void
+    {
+        $this->stepsPanel->setTodos(
+            null === $this->sessionId ? [] : $this->todos->all($this->sessionId->value),
+        );
+    }
+
     // ── Prompt submission ───────────────────────────────────────────────
 
     private function submitPrompt(string $text): void
     {
+        $sessionId = $this->ensureSession();
+
         $this->history->push($text);
         $this->input->setValue('');
         $this->view->user($text);
@@ -557,7 +706,6 @@ final class TuiCommand extends Command
         $this->stream->beginTurn();
         $this->tui?->requestRender();
 
-        $sessionId = $this->sessionId;
         EventLoop::queue(function () use ($sessionId, $text): void {
             // Paint the user entry + working status before the blocking call.
             $this->tui?->requestRender(true);
@@ -573,6 +721,7 @@ final class TuiCommand extends Command
                 $this->view->error($e->getMessage());
             } finally {
                 $this->statusBar->stopWorking();
+                $this->refreshTodos();
                 $this->tui?->requestRender(true);
             }
         });

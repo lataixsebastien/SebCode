@@ -7,6 +7,8 @@ namespace App\Assistant\UI\Tui\Component;
 use App\Assistant\Domain\Model\Message;
 use App\Assistant\Domain\Model\ValueObject\MessagePayloadKind;
 use App\Assistant\Domain\Model\ValueObject\MessageRole;
+use App\Assistant\UI\Tui\TuiTheme;
+use Symfony\Component\Tui\Style\Color;
 use Symfony\Component\Tui\Widget\ContainerWidget;
 use Symfony\Component\Tui\Widget\MarkdownWidget;
 use Symfony\Component\Tui\Widget\TextWidget;
@@ -20,11 +22,13 @@ use Symfony\Component\Tui\Widget\TextWidget;
  */
 final class TranscriptView
 {
-    private const string LOGO = <<<'TXT'
-        █▀▀ █▀▀ █▀▄ █▀▀ █▀█ █▀▄ █▀▀
-        ▀▀█ █▀▀ █▀▄ █   █ █ █ █ █▀▀
-        ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀
-        TXT;
+    /** Two-tone gradient applied row by row (peach → ember), opencode-style. */
+    private const array LOGO_ROWS = [
+        '█▀▀ █▀▀ █▀▄ █▀▀ █▀█ █▀▄ █▀▀',
+        '▀▀█ █▀▀ █▀▄ █   █ █ █ █ █▀▀',
+        '▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀',
+    ];
+    private const array LOGO_SHADES = ['#fab283', '#e89263', '#b06a40'];
 
     public function __construct(
         private readonly ContainerWidget $container,
@@ -34,13 +38,34 @@ final class TranscriptView
 
     public function splash(string $model, string $sessionId, string $title): void
     {
-        $this->container->add((new TextWidget(self::LOGO))->addStyleClass('splash-logo'));
+        $this->logo();
         $this->container->add((new TextWidget(\sprintf(
             "%s · %s\n%s\ntype your prompt, /help for commands",
             $title,
             $model,
             $sessionId,
         )))->addStyleClass('splash-info'));
+    }
+
+    /** Welcome screen shown at boot before any session exists (STEP-30). */
+    public function home(string $defaultModel): void
+    {
+        $this->logo();
+        $accent = Color::from(TuiTheme::PRIMARY)->toForegroundCode();
+        $this->container->add((new TextWidget(
+            $accent.'SebCode'."\x1b[39m".' — local coding agent · '.$defaultModel."\n"
+            .'pick an option below — or press esc and just start typing',
+        ))->addStyleClass('splash-info'));
+    }
+
+    private function logo(): void
+    {
+        $lines = [];
+        foreach (self::LOGO_ROWS as $i => $row) {
+            $lines[] = Color::from(self::LOGO_SHADES[$i])->toForegroundCode().$row."\x1b[39m";
+        }
+
+        $this->container->add((new TextWidget(implode("\n", $lines)))->addStyleClass('splash-logo'));
     }
 
     public function user(string $text): void

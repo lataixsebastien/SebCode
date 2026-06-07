@@ -34,6 +34,9 @@ final class TuiAgentOutputStream implements AgentOutputStream
     /** @var resource */
     private $stdin;
 
+    /** @var (\Closure(): void)|null */
+    private ?\Closure $onTodosChanged = null;
+
     /**
      * @param resource|null $stdin defaults to STDIN; injectable for tests
      */
@@ -44,6 +47,17 @@ final class TuiAgentOutputStream implements AgentOutputStream
         $stdin = null,
     ) {
         $this->stdin = \is_resource($stdin) ? $stdin : \STDIN;
+    }
+
+    /**
+     * Called whenever the agent rewrites its todo list (`todowrite` tool),
+     * so the UI can refresh the Steps panel live mid-turn.
+     *
+     * @param callable(): void $callback
+     */
+    public function onTodosChanged(callable $callback): void
+    {
+        $this->onTodosChanged = $callback(...);
     }
 
     public function assistantText(string $delta): void
@@ -73,6 +87,11 @@ final class TuiAgentOutputStream implements AgentOutputStream
     {
         $this->finishAssistant();
         $this->transcript->toolResult($name, $output, $isError);
+
+        if ('todowrite' === $name && !$isError && null !== $this->onTodosChanged) {
+            ($this->onTodosChanged)();
+        }
+
         $this->render();
     }
 

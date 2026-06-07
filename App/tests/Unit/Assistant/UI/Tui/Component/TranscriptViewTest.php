@@ -49,6 +49,17 @@ final class TranscriptViewTest extends TestCase
         self::assertStringContainsString('/help for commands', $output);
     }
 
+    public function testHomeShowsLogoDefaultModelAndHint(): void
+    {
+        $this->view->home('qwen2.5:3b');
+
+        $output = $this->renderToText();
+
+        self::assertStringContainsString('█▀▀', $output);
+        self::assertStringContainsString('SebCode — local coding agent · qwen2.5:3b', $output);
+        self::assertStringContainsString('pick an option below', $output);
+    }
+
     public function testFullConversationRendersWithoutWidthViolations(): void
     {
         $this->view->user("explain this\nproject");

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Assistant\UI\Tui;
 
 use App\Assistant\UI\Tui\Component\StatusBarWidget;
+use App\Assistant\UI\Tui\Component\StepsPanelWidget;
 use Symfony\Component\Tui\Style\Border;
 use Symfony\Component\Tui\Style\BorderPattern;
 use Symfony\Component\Tui\Style\Padding;
@@ -72,6 +73,15 @@ final class TuiTheme
             '.permission-title' => new Style(color: self::WARNING, bold: true),
             '.permission-body' => new Style(color: self::TEXT),
             '.permission-hint' => new Style(color: self::MUTED),
+
+            // ── StepsPanelWidget (agent todo list, STEP-30) ──
+            StepsPanelWidget::class.'::border' => new Style(color: self::BORDER),
+            StepsPanelWidget::class.'::title' => new Style(color: self::PRIMARY, bold: true),
+            StepsPanelWidget::class.'::counter' => new Style(color: self::MUTED),
+            StepsPanelWidget::class.'::done' => new Style(color: self::SUCCESS),
+            StepsPanelWidget::class.'::active' => new Style(color: self::PRIMARY, bold: true),
+            StepsPanelWidget::class.'::pending' => new Style(color: self::MUTED),
+            StepsPanelWidget::class.'::cancelled' => new Style(color: self::MUTED, strikethrough: true),
 
             // ── StatusBarWidget sub-elements ──
             // (deptrac's parser chokes on PHP 8.4 `new X()->method()` syntax,
