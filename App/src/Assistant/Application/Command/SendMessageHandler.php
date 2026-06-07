@@ -83,7 +83,25 @@ final readonly class SendMessageHandler
                 static function (string $delta) use ($stream): void {
                     $stream->assistantText($delta);
                 },
+                static fn (): bool => $stream->isInterrupted(),
             );
+
+            // User interrupted mid-generation: keep whatever text arrived, skip
+            // any (partial) tool calls, and end the loop back at the prompt.
+            if ($stream->isInterrupted()) {
+                $assistantMessage = $this->appendAssistantText($session, $reply->content);
+                $session->touch($this->clock->now());
+                $this->sessions->save($session);
+
+                return new SendMessageResult(
+                    $userMessage,
+                    $assistantMessage,
+                    $intermediate,
+                    $reply->promptTokens,
+                    $reply->completionTokens,
+                    interrupted: true,
+                );
+            }
 
             if ([] === $reply->toolCalls) {
                 $assistantMessage = $this->appendAssistantText($session, $reply->content);

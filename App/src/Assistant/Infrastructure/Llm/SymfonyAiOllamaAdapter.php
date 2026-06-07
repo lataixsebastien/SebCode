@@ -24,7 +24,6 @@ use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
-use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
 /**
@@ -80,7 +79,7 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
         );
     }
 
-    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText): LlmReply
+    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText, ?callable $shouldStop = null): LlmReply
     {
         $bag = $this->toMessageBag($conversation);
         $options = $this->toolOptions($tools);
@@ -94,6 +93,9 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
         try {
             $deferred = $this->platform->invoke($model->value, $bag, $options);
             foreach ($deferred->asStream() as $delta) {
+                if (null !== $shouldStop && $shouldStop()) {
+                    break;
+                }
                 if ($delta instanceof TextDelta) {
                     $content .= $delta->getText();
                     $onText($delta->getText());
@@ -101,10 +103,17 @@ final readonly class SymfonyAiOllamaAdapter implements LlmPort
                     foreach ($delta->getToolCalls() as $tc) {
                         $toolCalls[] = new ToolCallRequest($tc->getId(), $tc->getName(), $tc->getArguments());
                     }
-                } elseif ($delta instanceof TokenUsage) {
-                    $promptTokens = $delta->getPromptTokens();
-                    $completionTokens = $delta->getCompletionTokens();
                 }
+            }
+
+            // The platform's TokenUsage StreamListener lifts the trailing usage
+            // delta OUT of the stream (skipDelta) and into result metadata, so it
+            // never arrives as a delta above — read it from metadata once the
+            // stream is fully drained (asStream() copies it across on completion).
+            $usage = $deferred->getMetadata()->get('token_usage');
+            if ($usage instanceof TokenUsageInterface) {
+                $promptTokens = $usage->getPromptTokens();
+                $completionTokens = $usage->getCompletionTokens();
             }
         } catch (\Throwable $e) {
             throw LlmUnavailable::fromUpstream($e->getMessage(), $e);

@@ -22,4 +22,12 @@ interface AgentOutputStream
     public function toolCall(string $name, array $arguments): void;
 
     public function toolResult(string $name, string $output, bool $isError): void;
+
+    /**
+     * Whether the user asked to interrupt the in-flight generation. The agent
+     * loop polls this between streamed chunks and between turns; when it returns
+     * true the loop stops streaming, keeps whatever text already arrived, and
+     * returns control to the UI. Sinks with no interactive input return false.
+     */
+    public function isInterrupted(): bool;
 }

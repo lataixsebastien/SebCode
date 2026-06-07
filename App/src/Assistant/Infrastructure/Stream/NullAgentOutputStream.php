@@ -23,4 +23,9 @@ final class NullAgentOutputStream implements AgentOutputStream
     public function toolResult(string $name, string $output, bool $isError): void
     {
     }
+
+    public function isInterrupted(): bool
+    {
+        return false;
+    }
 }

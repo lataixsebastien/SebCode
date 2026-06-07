@@ -49,9 +49,12 @@ final class ScriptedLlm implements LlmPort
         return $this->next($model, $conversation, $tools);
     }
 
-    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText): LlmReply
+    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText, ?callable $shouldStop = null): LlmReply
     {
         $reply = $this->next($model, $conversation, $tools);
+        if (null !== $shouldStop && $shouldStop()) {
+            return $reply;
+        }
         if ('' !== $reply->content) {
             $onText($reply->content);
         }

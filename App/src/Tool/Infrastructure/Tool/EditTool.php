@@ -97,7 +97,7 @@ final readonly class EditTool implements Tool
         } catch (PathNotAllowed $e) {
             return ToolResult::failure($call->id, $e->getMessage());
         }
-        $relative = WorkspacePath::relativePattern($filePath);
+        $relative = WorkspacePath::relativePattern($context->projectRoot, $filePath);
 
         if ('' === $oldString) {
             return $this->createFile($call, $absolute, $relative, $newString);

@@ -24,11 +24,16 @@ interface LlmPort
      * called with each chunk as it arrives. The returned reply still carries
      * the full content, tool calls and token usage.
      *
+     * `$shouldStop`, when given, is polled between streamed chunks; as soon as it
+     * returns true the adapter stops consuming the stream and returns the partial
+     * reply gathered so far. Used to let the user interrupt a running generation.
+     *
      * @param list<Message> $conversation
      * @param list<ToolAdvertisement> $tools
      * @param callable(string): void $onText
+     * @param (callable(): bool)|null $shouldStop
      *
      * @throws LlmUnavailable
      */
-    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText): LlmReply;
+    public function completeStreaming(ModelName $model, array $conversation, array $tools, callable $onText, ?callable $shouldStop = null): LlmReply;
 }

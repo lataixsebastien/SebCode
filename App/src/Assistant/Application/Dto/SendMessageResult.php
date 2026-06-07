@@ -20,6 +20,7 @@ final readonly class SendMessageResult
         public array $intermediateMessages = [],
         public ?int $promptTokens = null,
         public ?int $completionTokens = null,
+        public bool $interrupted = false,
     ) {
     }
 }

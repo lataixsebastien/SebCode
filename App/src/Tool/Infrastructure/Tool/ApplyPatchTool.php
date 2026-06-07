@@ -128,7 +128,7 @@ final readonly class ApplyPatchTool implements Tool
 
         foreach ($patches as $patch) {
             $absolute = WorkspacePath::resolveForWrite($projectRoot, $patch->path);
-            $relative = WorkspacePath::relativePattern($patch->path);
+            $relative = WorkspacePath::relativePattern($projectRoot, $patch->path);
             $patterns[] = $relative;
 
             switch ($patch->kind) {
@@ -153,7 +153,7 @@ final readonly class ApplyPatchTool implements Tool
 
                     if (null !== $patch->movePath) {
                         $moveAbsolute = WorkspacePath::resolveForWrite($projectRoot, $patch->movePath);
-                        $moveRelative = WorkspacePath::relativePattern($patch->movePath);
+                        $moveRelative = WorkspacePath::relativePattern($projectRoot, $patch->movePath);
                         $patterns[] = $moveRelative;
                         $writes[] = [$moveAbsolute, $newContent];
                         $deletes[] = $absolute;

@@ -169,6 +169,24 @@ final class SendMessageHandlerTest extends TestCase
         self::assertContains('final answer', $sink->texts, 'The final assistant text is streamed live.');
     }
 
+    public function testUserInterruptStopsTheLoopBeforeRunningToolCalls(): void
+    {
+        $sink = new FakeAgentOutputStream();
+        $sink->interrupted = true;
+        $this->streams->attach($sink);
+
+        // Even though the model asked for a tool call, the interrupt must end the
+        // turn before it runs, and the loop must not request a second reply.
+        $this->llm->scriptToolCallTurn([new ToolCallRequest('0', 'read', ['filePath' => 'x'])]);
+        $this->llm->scriptReply('should never be reached');
+
+        $result = ($this->handler)(new SendMessageCommand($this->sessionId, 'go'));
+
+        self::assertTrue($result->interrupted);
+        self::assertSame([], $sink->toolCalls, 'No tool runs after an interrupt.');
+        self::assertCount(1, $this->llm->calls(), 'The loop stops after the interrupted turn.');
+    }
+
     public function testSessionUpdatedAtIsBumped(): void
     {
         $this->llm->scriptReply('x');

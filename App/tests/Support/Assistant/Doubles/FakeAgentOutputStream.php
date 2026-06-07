@@ -21,6 +21,9 @@ final class FakeAgentOutputStream implements AgentOutputStream
     /** @var list<array{name: string, output: string, isError: bool}> */
     public array $toolResults = [];
 
+    /** Flip to simulate the user interrupting the in-flight generation. */
+    public bool $interrupted = false;
+
     public function assistantText(string $delta): void
     {
         $this->texts[] = $delta;
@@ -34,5 +37,10 @@ final class FakeAgentOutputStream implements AgentOutputStream
     public function toolResult(string $name, string $output, bool $isError): void
     {
         $this->toolResults[] = ['name' => $name, 'output' => $output, 'isError' => $isError];
+    }
+
+    public function isInterrupted(): bool
+    {
+        return $this->interrupted;
     }
 }

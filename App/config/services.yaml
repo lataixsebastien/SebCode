@@ -70,6 +70,10 @@ services:
         arguments:
             $defaultModel: '%env(LLM_MODEL)%'
 
+    App\Assistant\UI\Cli\ChatCommand:
+        arguments:
+            $defaultModel: '%env(LLM_MODEL)%'
+
     App\Assistant\UI\Tui\TuiCommand:
         arguments:
             $defaultModel: '%env(LLM_MODEL)%'

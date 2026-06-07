@@ -77,7 +77,7 @@ final readonly class WriteTool implements Tool
             return ToolResult::failure($call->id, $e->getMessage());
         }
 
-        $relative = WorkspacePath::relativePattern($filePath);
+        $relative = WorkspacePath::relativePattern($context->projectRoot, $filePath);
         $existed = is_file($absolute);
 
         // Hard failure if denied — propagates and aborts the loop (opencode parity).
