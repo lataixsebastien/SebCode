@@ -8,6 +8,7 @@ SebCode est une **réimplémentation de [opencode](https://opencode.ai)** (agent
 
 - **Symfony AI bundle** (`symfony/ai-bundle`, `symfony/ai-platform`, `symfony/ai-agent`, `symfony/ai-ollama-platform`) — moteur LLM, agents, tools.
 - **Symfony TUI** (`symfony/tui ^8.1@beta`) — UI terminal interactive type opencode.
+- **Mode console-first** — Symfony Console et Symfony UI/TUI sont les points d'entrée principaux ; le MVP doit fonctionner sans serveur HTTP applicatif.
 - **Architecture hexagonale + DDD tactique** — un *Bounded Context* par grand domaine fonctionnel.
 - **Doctrine ORM + PostgreSQL** pour la persistance ; **Redis** pour Messenger / cache.
 
@@ -120,6 +121,13 @@ App/src/<Context>/
 - Plateforme par défaut : **Ollama** (gratuite, locale). Modèle par défaut : `qwen2.5:3b` (rapide pour dev).
 - Variables d'env : `LLM_PLATFORM`, `LLM_MODEL`, `OLLAMA_ENDPOINT`, `OLLAMA_HTTP_TIMEOUT`.
 - Wrapper interne `LlmPort` (Domain) pour isoler du `symfony/ai-platform`. Permet de mocker en test et de switcher de provider.
+- Utiliser les nouveautés Symfony AI / Agent / Ollama pour le runtime agentique, les tool calls et le streaming dès que cela évite du code maison.
+
+### 4.2.bis. Mode Console
+
+- Les entrées produit du MVP passent par Symfony Console et Symfony UI/TUI.
+- Ne pas ajouter d'API HTTP, de contrôleur web ou de serveur applicatif tant que le besoin n'est pas explicite.
+- Le transport HTTP reste seulement toléré pour joindre Ollama local si la plateforme choisie l'utilise.
 
 ### 4.3. Symfony TUI
 

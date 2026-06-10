@@ -13,7 +13,8 @@ RUN docker-php-ext-install \
     intl \
     opcache \
     pdo \
-    pdo_pgsql
+    pdo_pgsql \
+    pdo_sqlite
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

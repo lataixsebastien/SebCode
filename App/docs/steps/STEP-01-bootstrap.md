@@ -1,67 +1,68 @@
-# STEP-01 — Bootstrap : branche, CLAUDE.md, workflow docs
-
-**Statut :** ✅ terminé (commit `728402b`)
-**Branche :** `feat/sebcode-foundation` (depuis `main`)
+# STEP-01 — Bootstrap projet
 
 ## But
 
-Poser les fondations *méta* du projet avant d'écrire du code métier :
+Créer un nouveau socle SebCode from scratch dans `App/`, en PHP 8.4 et Symfony 8.1, sans réintroduire l'ancien code supprimé.
 
-1. Une branche propre dédiée à la reconstruction hexa/DDD.
-2. Un `CLAUDE.md` racine qui décrit les règles du jeu (archi, naming, layers, workflow).
-3. Un dossier `App/docs/steps/` où chaque grande étape est documentée dans un markdown dédié.
-4. Un `.gitignore` racine sain (les `.md` n'étaient plus tracés, et la référence opencode polluait le statut).
+Le résultat attendu de ce step est limité au bootstrap : Composer minimal, autoload PSR-4, application Symfony Console versionnée, configuration locale, PHPUnit, PHPStan et PHP-CS-Fixer.
 
 ## Décisions clés
 
-| Décision | Choix | Raison |
-|---|---|---|
-| Point de départ | `main` (vierge) | L'utilisateur a confirmé "tout vierge depuis main". La branche `feat/step2-hexa-ddd-foundations` est stashée comme backup (`stash@{0}`). |
-| Nom de branche | `feat/sebcode-foundation` | Reflète l'objectif global (fonder le projet), pas un step précis. |
-| Emplacement docs | `App/docs/steps/STEP-NN-<slug>.md` | Un fichier par step, près de l'app. Plus lisible qu'un mega `STEPS.md`. |
-| Langue docs | Français pour la doc utilisateur, anglais pour le code/commentaires | Préférence utilisateur (FR), conventions code (EN). |
-| `.gitignore` racine | Réécrit (ancienne version ignorait tous les `.md`) | Permettre CLAUDE.md et docs. Ignorer `_opencode_ref/` + `opencode-dev.zip` (lourd, juste local). |
+- Repartir de zéro comme demandé dans `PROMPT_MASTER_SEBCODE_OPENCODE_PHP_SECURE_LOCAL.md`.
+- Cibler `PHP ^8.4` et `Symfony 8.1.*`.
+- Suivre la documentation Symfony 8.1 : pour une application console/microservice, démarrer sans `--webapp` et n'ajouter que `symfony/console` au runtime de ce step.
+- Garder Symfony AI / Agent / Ollama et Symfony UI/TUI comme cible documentée, mais ne pas les installer avant le step qui les utilise.
+- Garder le MVP console-first : pas de contrôleur HTTP, pas d'API locale et pas de serveur applicatif obligatoire.
+- Ne pas installer `symfony/http-client` au bootstrap ; il sera ajouté uniquement avec le provider Ollama si nécessaire.
 
 ## Fichiers touchés
 
-- ➕ `CLAUDE.md` (racine) — règles projet (archi, layers, naming, workflow).
-- ➕ `App/docs/steps/STEP-01-bootstrap.md` (ce fichier).
-- ✏️ `.gitignore` (racine) — propre, n'ignore plus les `.md`, ignore reference opencode.
-
-## État de l'app sur `main` (point de départ)
-
-À noter pour les steps suivants, sont déjà présents :
-
-- `App/composer.json` : `symfony/ai-bundle ^0.9`, `symfony/ai-platform`, `symfony/ai-ollama-platform`, `symfony/ai-agent`, `symfony/tui ^8.1@beta`, `doctrine/orm ^3.6`, `symfony/messenger 8.1.*`, etc.
-- `App/src/{Domain,Application,Infrastructure,UI}` : dossiers vides (squelette nu).
-- `App/config/packages/` : `doctrine.yaml`, `messenger.yaml`, `ai.yaml`, `ai_ollama_platform.yaml`, `framework.yaml`, `lock.yaml`, etc. déjà présents.
-- `docker-compose.yml` : `php`, `nginx`, `postgres:16`, `redis:7`.
-- `App/.env` : `DATABASE_URL` Postgres, `MESSENGER_TRANSPORT_DSN` Redis, mais **pas encore** les vars Ollama (à ajouter en STEP-04).
-- `App/vendor/` : composer install déjà passé.
-
-⚠️ Ce qui **manque** par rapport à ce qu'il y avait sur `step2-hexa-ddd-foundations` :
-- Vars Ollama dans `.env` (`OLLAMA_ENDPOINT`, `OLLAMA_HTTP_TIMEOUT`, `LLM_PLATFORM`, `LLM_MODEL`).
-- `phpstan.neon.dist`, `.php-cs-fixer.dist.php`, `phpunit.dist.xml`.
-- Scripts `composer cs/stan/test/qa`.
-- Le contexte `Assistant/` entier.
-
-À recréer dans les steps qui suivent.
+- Ajoutés : `App/composer.json`, `App/bin/sebcode`, `App/config/sebcode.yaml`.
+- Ajoutés : `App/src/ConsoleApplicationBuilder.php`, `App/src/UI/Console/AboutCommand.php`.
+- Ajoutés : `App/tests/Unit/ConsoleApplicationBuilderTest.php`, `App/tests/bootstrap.php`, `App/phpunit.dist.xml`, `App/phpstan.dist.neon`, `App/.php-cs-fixer.dist.php`.
+- Ajoutés : `App/README.md`, `App/AGENTS.md`, `App/.gitignore`.
+- Ajouté : `App/docs/steps/STEP-01-bootstrap.md`.
+- Ajouté : `App/composer.lock` généré dans le container PHP 8.4.
+- Modifiés : `CLAUDE.md`, `PROMPT_MASTER_SEBCODE_OPENCODE_PHP_SECURE_LOCAL.md` pour préciser PHP 8.4, Symfony 8.1, Symfony AI/UI/TUI, le mode console-first et l'installation progressive des dépendances.
+- Modifié : `docker-compose.yml` pour retirer le service `nginx` et garder un runtime console-first.
 
 ## Comment vérifier
 
 ```bash
-# Branche bien créée et active
-git -C C:/Users/latai/Documents/Professionnel/SebCode branch --show-current
-# → feat/sebcode-foundation
-
-# Fichiers présents
-ls CLAUDE.md
-ls App/docs/steps/STEP-01-bootstrap.md
-cat .gitignore   # ne contient plus *.md
+cd App
+composer validate --strict
+composer install
+php bin/sebcode --version
+composer test:unit
+composer stan
+composer cs
 ```
+
+Avec Docker PHP 8.4 :
+
+```bash
+docker compose run --rm php composer install
+docker compose run --rm php php bin/sebcode --version
+docker compose run --rm php composer test:unit
+docker compose run --rm php composer stan
+docker compose run --rm php composer cs
+```
+
+## Résultat
+
+- Documentation Symfony consultée : Symfony 8.1 demande PHP 8.4+ et recommande `symfony new ... --version="8.1.x-dev"` sans `--webapp` pour une application console/microservice/API.
+- Documentation Symfony Console consultée : le composant autonome s'installe avec `composer require symfony/console` et l'application enregistre les commandes avec `addCommand()`.
+- `docker compose run --rm php composer validate --strict` : OK.
+- `docker compose run --rm php composer install` : OK, lock minimal généré.
+- `docker compose run --rm php php bin/sebcode --version` : OK, affiche `SebCode 0.1.0-dev`.
+- `docker compose run --rm php composer qa` : OK, CS Fixer, PHPStan et PHPUnit passent.
+- Ancien container `sebcode_nginx` supprimé via `docker compose up -d --remove-orphans postgres redis` après retrait du service HTTP.
+
+## Risques restants
+
+- Le bootstrap ne contient pas encore de kernel Symfony complet, de DI applicative, de Symfony AI ni de TUI : ces dépendances seront ajoutées au moment du step fonctionnel correspondant.
+- Les tests couvrent seulement le démarrage console minimal ; la sécurité workspace commence au step suivant.
 
 ## Step suivante
 
-**STEP-02** — Bounded Context `Assistant` : Domain layer.
-
-Créer les aggregates `Session` et `Message`, les Value Objects (`SessionId`, `MessageId`, `MessageRole`, `Content`, `ModelName`), les exceptions Domain, et les Ports (`SessionRepository`, `MessageRepository`, `LlmPort`, `Clock`). Pur PHP, zéro Symfony, zéro Doctrine. Tests unitaires PHPUnit en parallèle.
+`STEP-02-security-core.md` : implémenter `WorkspaceGuard`, `PathNormalizer`, `IgnoreMatcher`, `SecretRedactor`, `NetworkPolicy` et les tests sécurité.

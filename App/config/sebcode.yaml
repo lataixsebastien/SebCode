@@ -1,0 +1,16 @@
+runtime:
+  mode: console_first
+  http_surface: disabled
+
+llm:
+  platform: ollama
+  endpoint: 'http://127.0.0.1:11434'
+  model: qwen2.5:3b
+
+security:
+  network:
+    allow_localhost_only: true
+  workspace:
+    root: '%cwd%'
+  secrets:
+    redact: true

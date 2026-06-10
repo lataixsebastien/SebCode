@@ -2,25 +2,48 @@
 
 declare(strict_types=1);
 
-namespace App\Tool\Domain\Model;
+namespace SebCode\Tool\Domain\Model;
 
-use App\Tool\Domain\Model\ValueObject\JsonSchema;
-use App\Tool\Domain\Model\ValueObject\ToolName;
-
-/**
- * Public description of a tool that the LLM consumes when deciding to invoke it.
- *
- * Pure data — the actual execution logic lives behind the `Tool` port.
- */
 final readonly class ToolDescriptor
 {
+    /**
+     * @param array<string, mixed> $inputSchema
+     */
     public function __construct(
-        public ToolName $name,
+        public string $name,
         public string $description,
-        public JsonSchema $parameters,
+        public string $category = 'general',
+        public bool $safe = false,
+        public int $cost = 1,
+        /** @var list<string> */
+        public array $allowedModes = ['READ_ONLY', 'PATCH', 'EXECUTE', 'AUTO', 'REVIEW'],
+        public int $timeoutSeconds = 30,
+        public bool $requiresReview = true,
+        public array $inputSchema = [],
     ) {
-        if ('' === trim($description)) {
-            throw new \InvalidArgumentException('Tool description cannot be empty.');
+        if ('' === trim($name)) {
+            throw new \InvalidArgumentException('Tool name must not be empty.');
         }
+
+        if ('' === trim($description)) {
+            throw new \InvalidArgumentException('Tool description must not be empty.');
+        }
+
+        if ('' === trim($category)) {
+            throw new \InvalidArgumentException('Tool category must not be empty.');
+        }
+
+        if ($cost < 0) {
+            throw new \InvalidArgumentException('Tool cost must be zero or greater.');
+        }
+
+        if ($timeoutSeconds < 1) {
+            throw new \InvalidArgumentException('Tool timeout must be one second or greater.');
+        }
+    }
+
+    public function isAvailableForMode(string $mode): bool
+    {
+        return in_array($mode, $this->allowedModes, true);
     }
 }

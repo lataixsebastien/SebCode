@@ -2,41 +2,33 @@
 
 declare(strict_types=1);
 
-namespace App\Tool\Domain\Model;
+namespace SebCode\Tool\Domain\Model;
 
-use App\Tool\Domain\Model\ValueObject\ToolCallId;
-
-/**
- * Outcome of executing a `ToolCall`.
- *
- * `isError` is a soft flag — the assistant loop keeps going and feeds the
- * error string back to the LLM so it can correct its next turn. A hard
- * failure (registry missing, infrastructure down) raises an exception
- * instead and aborts the loop.
- */
 final readonly class ToolResult
 {
     /**
-     * @param array<string, mixed>|null $metadata
+     * @param array<string, mixed> $metadata
      */
-    public function __construct(
-        public ToolCallId $callId,
+    private function __construct(
+        public bool $success,
         public string $output,
-        public bool $isError = false,
-        public ?array $metadata = null,
+        public array $metadata = [],
     ) {
     }
 
     /**
-     * @param array<string, mixed>|null $metadata
+     * @param array<string, mixed> $metadata
      */
-    public static function success(ToolCallId $callId, string $output, ?array $metadata = null): self
+    public static function success(string $output, array $metadata = []): self
     {
-        return new self($callId, $output, false, $metadata);
+        return new self(true, $output, $metadata);
     }
 
-    public static function failure(ToolCallId $callId, string $reason): self
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public static function failure(string $output, array $metadata = []): self
     {
-        return new self($callId, $reason, true, null);
+        return new self(false, $output, $metadata);
     }
 }

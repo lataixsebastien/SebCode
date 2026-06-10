@@ -1,13 +1,6 @@
 parameters:
     level: max
-
     paths:
         - src
         - tests
-
-    bootstrapFiles:
-        - vendor/autoload.php
-
-    excludePaths:
-        - var/cache/*
-        - vendor/*
+    tmpDir: var/cache/phpstan

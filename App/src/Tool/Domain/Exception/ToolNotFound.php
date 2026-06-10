@@ -2,14 +2,12 @@
 
 declare(strict_types=1);
 
-namespace App\Tool\Domain\Exception;
-
-use App\Tool\Domain\Model\ValueObject\ToolName;
+namespace SebCode\Tool\Domain\Exception;
 
 final class ToolNotFound extends \RuntimeException
 {
-    public static function withName(ToolName $name): self
+    public static function named(string $name): self
     {
-        return new self(\sprintf('No tool registered under the name "%s".', $name->value));
+        return new self(sprintf('Tool "%s" was not found.', $name));
     }
 }

@@ -1,25 +1,13 @@
-
-###> symfony/framework-bundle ###
-/.env.local
-/.env.local.php
-/.env.*.local
-/config/secrets/prod/prod.decrypt.private.php
-/public/bundles/
-/var/
 /vendor/
-###< symfony/framework-bundle ###
-
-# Tooling caches
-/.php-cs-fixer.cache
-/.phpunit.result.cache
-/.deptrac.cache
-
-###> phpunit/phpunit ###
-/phpunit.xml
+/var/cache/
 /.phpunit.cache/
-###< phpunit/phpunit ###
-
-###> friendsofphp/php-cs-fixer ###
-/.php-cs-fixer.php
 /.php-cs-fixer.cache
-###< friendsofphp/php-cs-fixer ###
+/.sebcode/*.db
+/.sebcode/*.sqlite
+/.sebcode/*.sqlite3
+/.sebcode/audit/*.jsonl
+/.sebcode/patches/*
+/.sebcode/context/*
+/.sebcode/index/*
+/var/db/*.sqlite
+/var/db/*.sqlite3
